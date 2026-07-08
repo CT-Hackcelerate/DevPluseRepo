@@ -1,0 +1,367 @@
+# Token Optimizer: Techniques to Reduce Token Usage & AI Credits
+
+**Version:** 1.0
+**Last updated:** 2026-07-08
+**Audience:** Engineers and architects building applications on top of Large Language Models (LLMs)
+
+---
+
+## 1. Introduction
+
+Every interaction with an LLM is billed by **tokens**, not by requests. A token is a
+sub-word unit produced by the model's tokenizer (roughly ~4 characters or ~0.75 words
+of English text). Both what you send (**input / prompt tokens**) and what the model
+returns (**output / completion tokens**) are metered, and output tokens are almost
+always priced higher than input tokens (commonly 3x–5x).
+
+Because cost scales linearly with tokens and roughly quadratically with context length
+in terms of latency, **token optimization** is simultaneously a cost lever, a latency
+lever, and a quality lever (a smaller, cleaner context usually produces better answers).
+
+This document catalogs the practical techniques a "token optimizer" layer can apply,
+organized from highest-leverage/lowest-effort to more advanced architectural patterns.
+
+### 1.1 The cost model in one formula
+
+```
+cost_per_call = (input_tokens  × price_in)
+              + (output_tokens × price_out)
+              + (cache_write_tokens × price_cache_write)   # if using prompt caching
+              - (cache_read_tokens × price_in × discount)  # cache reads are cheaper
+
+total_cost   = Σ cost_per_call  over all calls (including retries & agent loops)
+```
+
+Key implications:
+- **Output tokens dominate.** Reducing verbosity of responses often beats trimming prompts.
+- **Repeated calls multiply everything.** Agent loops and retries can 10x a naive estimate.
+- **Caching changes the math.** Static context can be re-billed at a fraction of the price.
+
+---
+
+## 2. Quick reference: technique catalog
+
+| # | Technique | Primarily reduces | Effort | Typical saving |
+|---|-----------|-------------------|--------|----------------|
+| 1 | Prompt compression & pruning | Input | Low | 10–40% |
+| 2 | Output control (max_tokens, format) | Output | Low | 20–60% |
+| 3 | Prompt caching | Input | Low–Med | 50–90% on cached portion |
+| 4 | Model routing / tiering | Both | Med | 40–80% |
+| 5 | Context window management / truncation | Input | Med | 30–70% |
+| 6 | Retrieval-Augmented Generation (RAG) | Input | Med–High | 50–95% |
+| 7 | Summarization & memory compaction | Input | Med | 40–80% |
+| 8 | Semantic response caching | Both | Med | Up to 100% on hits |
+| 9 | Batching & request consolidation | Both | Low–Med | 20–50% |
+| 10 | Few-shot example minimization | Input | Low | 10–30% |
+| 11 | Structured output / function calling | Output | Low | 20–50% |
+| 12 | Streaming + early termination | Output | Low | Variable |
+| 13 | Token-aware chunking | Input | Med | Variable |
+| 14 | Fine-tuning / distillation | Input | High | 50–90% on prompts |
+| 15 | Speculative & cascaded inference | Both | High | 30–60% |
+
+---
+
+## 3. Techniques in detail
+
+### 3.1 Prompt compression & pruning
+
+**Idea:** Remove tokens that don't change the model's output.
+
+Techniques:
+- **Whitespace & formatting normalization** — collapse repeated spaces/newlines, strip
+  markdown decoration the model doesn't need. Minor but free.
+- **Remove redundant instructions** — say each rule once. Duplicated "be concise" lines
+  waste tokens on every call.
+- **Abbreviation & symbol substitution** — replace verbose boilerplate with compact
+  equivalents where meaning is preserved.
+- **Lossy semantic compression (e.g., LLMLingua)** — a small model scores each token's
+  importance and drops low-information tokens, achieving 2x–20x prompt compression with
+  minimal quality loss. Useful for long contexts / RAG passages.
+- **Strip dead context** — remove stack traces, HTML boilerplate, base64 blobs, license
+  headers, and other high-token/low-signal content before sending.
+
+**Technical note:** Always measure with a real tokenizer (e.g., `tiktoken` for OpenAI,
+the provider's token-counting endpoint for others) — character-count heuristics mislead,
+especially for code, JSON, and non-English text where tokens/char ratios differ sharply.
+
+```python
+import tiktoken
+enc = tiktoken.get_encoding("cl100k_base")
+def count(text): return len(enc.encode(text))
+```
+
+### 3.2 Output control
+
+Output tokens are the most expensive. Control them explicitly:
+
+- **`max_tokens` / `max_output_tokens`** — hard cap. Set it to the smallest value that
+  fits the task; don't leave it at the model maximum.
+- **Ask for terse output** — "Answer in one sentence", "Return only the JSON", "No
+  preamble". Prompt phrasing measurably shortens completions.
+- **Forbid restating the question** — models often echo the prompt; instruct against it.
+- **Stop sequences** — define delimiters so generation halts as soon as the answer is
+  complete instead of rambling.
+- **Constrain the schema** — a fixed enum or numeric answer is a handful of tokens vs. a
+  paragraph.
+
+### 3.3 Prompt caching
+
+Most major providers now support **prompt caching**: a static prefix of the prompt (system
+prompt, tool definitions, large documents, few-shot examples) is cached server-side, and
+subsequent calls that reuse that exact prefix are billed at a large discount (often 90%
+cheaper reads) and run faster.
+
+Best practices:
+- **Put stable content first, volatile content last.** Caching works on prefixes — order
+  matters. System prompt + tools + docs (stable) → then the user's turn (volatile).
+- **Keep the prefix byte-identical.** Any change (even a timestamp) invalidates the cache.
+- **Mind the TTL.** Caches expire (commonly ~5 minutes of inactivity); high-traffic
+  endpoints benefit most.
+- **Cache-write costs a premium** (~25% more than normal input), so caching pays off only
+  when the prefix is reused enough times to amortize the write.
+
+This is the single highest-leverage optimization for chatbots and agents with large,
+reused system prompts.
+
+### 3.4 Model routing / tiering
+
+Not every request needs the flagship model. Route by difficulty:
+
+- **Tiered models** — send trivial/classification tasks to a small, cheap model; escalate
+  only hard reasoning tasks to the large model. A cheap model can cost 1/10th–1/30th.
+- **Router/classifier** — a lightweight classifier (rules, embeddings, or a tiny LLM)
+  decides which model handles each request.
+- **Confidence-based escalation (cascade)** — try the cheap model first; if its confidence
+  (self-reported or via a verifier) is low, retry on the big model. Only the hard fraction
+  incurs premium cost.
+
+```
+request → classifier ──easy──► small model
+                     └─hard──► large model
+```
+
+### 3.5 Context window management
+
+For multi-turn conversations, the full history is resent every turn — token cost grows
+quadratically over a session if left unmanaged. Strategies:
+
+- **Sliding window** — keep only the last N turns verbatim.
+- **Token-budgeted truncation** — drop oldest messages until the history fits a budget.
+- **Priority pinning** — always keep the system prompt and the most recent user turn;
+  evict middle history first.
+- **Relevance filtering** — keep only turns semantically relevant to the current query
+  (via embeddings), drop the rest.
+
+### 3.6 Retrieval-Augmented Generation (RAG)
+
+Instead of stuffing an entire knowledge base into every prompt, **retrieve only the
+relevant chunks**:
+
+1. Chunk documents (token-aware; see 3.13) and embed them into a vector store.
+2. At query time, embed the query and retrieve top-k most similar chunks.
+3. Inject only those k chunks into the prompt.
+
+This replaces a 100k-token document dump with, say, 2k tokens of relevant passages — often
+a 50–95% input reduction *and* better answers (less distraction). Tune `k` and chunk size
+to the minimum that preserves accuracy. Add a **re-ranker** to keep `k` small without
+losing recall.
+
+### 3.7 Summarization & memory compaction
+
+For long agent runs or chats, periodically **replace verbose history with a summary**:
+
+- **Rolling summarization** — when history exceeds a threshold, summarize the oldest
+  portion into a compact synopsis and keep recent turns verbatim.
+- **Hierarchical memory** — short-term (raw recent turns) + long-term (summarized facts) +
+  entity/fact store (structured key-value).
+- **Compaction** — collapse tool outputs and intermediate reasoning into their conclusions
+  once no longer needed.
+
+Trade-off: summarization itself costs tokens (one extra call), so trigger it on a budget
+threshold, not every turn.
+
+### 3.8 Semantic response caching
+
+Cache *answers*, not just prompts. When a new query is semantically similar to a previously
+answered one (cosine similarity of embeddings above a threshold), return the stored answer
+and skip the LLM call entirely (up to 100% saving on hits).
+
+- Use an embedding index (e.g., GPTCache pattern) keyed by query embedding.
+- Set a similarity threshold carefully — too loose returns wrong answers, too tight lowers
+  the hit rate.
+- Add TTLs and invalidation for time-sensitive data.
+- Best for FAQ-like, high-repetition traffic; poor for highly personalized/unique queries.
+
+### 3.9 Batching & request consolidation
+
+- **Batch API** — many providers offer an asynchronous batch endpoint at ~50% discount for
+  non-latency-sensitive workloads (bulk classification, enrichment, evals).
+- **Consolidate calls** — if you make N independent small calls that share the same large
+  context, combine them into one call that returns N answers, so the shared context is
+  billed once instead of N times.
+- **Avoid chatty agent loops** — each agent step re-sends the growing context; fewer, more
+  capable steps beat many tiny ones.
+
+### 3.10 Few-shot example minimization
+
+Few-shot examples are pure input cost paid on every call.
+
+- Use the **minimum number of examples** that achieves the accuracy target — test 0/1/3/5.
+- Prefer **shorter, representative** examples over long ones.
+- **Cache** the example block (3.3) so it's cheap after the first call.
+- Consider replacing few-shot with **fine-tuning** (3.14) when volume is high.
+
+### 3.11 Structured output / function calling
+
+Asking for JSON/structured output via a schema (function calling, tool use, or a
+JSON-mode/grammar constraint) makes completions **compact and deterministic**: no prose
+wrapper, no "Sure, here's...", just the data. This cuts output tokens and eliminates
+fragile parsing/retries (retries are pure wasted cost).
+
+### 3.12 Streaming + early termination
+
+Stream the response and **stop as soon as you have what you need** (e.g., the first valid
+JSON object, or enough of a list). You still pay for generated tokens, but early
+termination prevents paying for a long tail you'll discard. Also improves perceived
+latency.
+
+### 3.13 Token-aware chunking
+
+When splitting documents for RAG or processing:
+- Chunk by **token count**, not character count, to pack context windows precisely.
+- Use **semantic boundaries** (paragraphs, sections) with small overlaps so chunks stay
+  coherent and you don't need redundant large overlaps.
+- Right-sized chunks improve retrieval precision → smaller `k` → fewer tokens.
+
+### 3.14 Fine-tuning & distillation
+
+If a long prompt (detailed instructions + many few-shot examples) is used at high volume,
+**fine-tune** a smaller model to internalize that behavior. The runtime prompt shrinks to
+just the input, eliminating thousands of instruction/example tokens per call.
+**Distillation** (train a small model on a large model's outputs) similarly moves cost from
+per-call tokens to a one-time training cost. High upfront effort; large sustained savings.
+
+### 3.15 Speculative & cascaded inference
+
+- **Cascades** (see 3.4) — cheap-first, escalate-on-low-confidence.
+- **Speculative decoding** — a small draft model proposes tokens the large model verifies;
+  reduces latency/compute (mostly a provider-side or self-hosted concern).
+- **Self-consistency budgeting** — techniques like sampling multiple reasoning paths are
+  accurate but multiply cost; cap the number of samples and only use on hard queries.
+
+---
+
+## 4. Reference architecture for a Token Optimizer layer
+
+Place an optimizer between your application and the LLM provider:
+
+```
+                ┌──────────────────────── Token Optimizer ─────────────────────────┐
+ App request ──►│ 1. Semantic cache lookup ──hit──────────────────────────► return │
+                │        │ miss                                                     │
+                │ 2. Prompt build: RAG retrieve → compress → dedupe               │
+                │ 3. Context manager: window/truncate/summarize history          │
+                │ 4. Model router: classify difficulty → pick model tier          │
+                │ 5. Attach prompt cache markers (stable prefix first)            │
+                │ 6. Set max_tokens, stop sequences, structured schema           │
+                │ 7. Call provider (batch if async-tolerable) with streaming     │
+                │ 8. Early-terminate; store answer in semantic cache             │
+                │ 9. Meter tokens & cost; log for feedback loop                  │
+                └────────────────────────────────────────────────────────────────┘
+```
+
+### 4.1 Minimal implementation sketch (Python-style pseudocode)
+
+```python
+def optimized_call(user_query, history, kb):
+    # 8. semantic response cache
+    if (hit := response_cache.lookup(user_query, threshold=0.95)):
+        return hit
+
+    # 6. RAG: retrieve only relevant context
+    context = kb.retrieve(user_query, k=4)          # token-aware chunks
+
+    # 1/10. compress context and prune few-shot to minimum
+    context = compress(context)                      # e.g. LLMLingua
+
+    # 5. manage conversation history to a token budget
+    history = fit_to_budget(history, max_tokens=2000)
+
+    # 4. route by difficulty
+    model = "small" if classifier(user_query) == "easy" else "large"
+
+    # build prompt: STABLE prefix first (cacheable), volatile last
+    messages = [
+        system_prompt,          # cached
+        *few_shot_examples,     # cached
+        *context,               # cached if reused
+        *history,
+        user_query,             # volatile
+    ]
+
+    # 2/11/12. output controls + streaming
+    resp = provider.chat(
+        model=model, messages=messages,
+        max_tokens=400, stop=["</answer>"],
+        response_format=SCHEMA, stream=True,
+        cache_control="prefix",
+    )
+    answer = read_until_complete(resp)   # early terminate
+
+    response_cache.store(user_query, answer)
+    meter.record(resp.usage)             # 9. feedback loop
+    return answer
+```
+
+---
+
+## 5. Measurement & governance
+
+You can't optimize what you don't measure.
+
+- **Instrument every call** — log input tokens, output tokens, cached tokens, model, cost,
+  latency, and a request category.
+- **Track cost per feature / per user / per request type** — find the expensive hotspots.
+- **Set budgets & alerts** — per-tenant token quotas, rate limits, and cost anomaly alerts.
+- **Guard against retry storms** — retries and agent loops are a top source of surprise
+  bills; cap iterations and back off.
+- **A/B test optimizations** — verify that a compression/routing change doesn't degrade
+  answer quality (track task success rate alongside cost).
+- **Estimate before you build** — `tokens × price × volume` for each planned flow.
+
+### 5.1 Prioritization heuristic
+
+1. Turn on **prompt caching** for any large reused prefix (biggest bang, least effort).
+2. **Cap output** (`max_tokens`, terse instructions) — output is the priciest.
+3. **Route to a cheaper model** where quality allows.
+4. Add **RAG** instead of dumping whole documents.
+5. Add **semantic response caching** for repetitive traffic.
+6. Introduce **summarization/window management** for long sessions.
+7. Consider **fine-tuning/batching** once volume justifies the engineering cost.
+
+---
+
+## 6. Pitfalls & trade-offs
+
+- **Over-compression hurts accuracy.** Always validate quality after trimming context.
+- **Aggressive caching returns stale/wrong answers.** Use conservative similarity
+  thresholds and TTLs for time-sensitive data.
+- **Truncating history breaks coherence.** Prefer summarization over hard cut-off for
+  conversational continuity.
+- **Cache-write premium** means caching a rarely-reused prefix can *cost more*.
+- **Cheaper models fail silently.** Route with a verifier or confidence check, not blind
+  cost-cutting.
+- **Optimization has a cost too.** Embeddings, classifiers, and summarization calls consume
+  tokens/compute — ensure net savings.
+
+---
+
+## 7. Summary
+
+Token optimization is a portfolio, not a single trick. The highest-leverage moves —
+**prompt caching, output caps, model routing, and RAG** — are low-effort and compound
+together. Layer in **semantic response caching, summarization, batching, and eventually
+fine-tuning** as volume grows. Above all, **measure everything**: instrument token usage,
+attribute cost, and validate that each optimization preserves answer quality. Done well, a
+token optimizer layer routinely cuts LLM spend by 50–90% while improving latency and often
+answer quality.
