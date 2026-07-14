@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($paths = @\\(\"C:\\\\Program Files\\\\Git\\\\cmd\\\\git.exe\",\"C:\\\\Program Files \\(x86\\)\\\\Git\\\\cmd\\\\git.exe\",\"$env:LOCALAPPDATA\\\\Programs\\\\Git\\\\cmd\\\\git.exe\"\\); foreach \\($p in $paths\\){ if \\(Test-Path $p\\){ \"FOUND: $p\" } }; \"winget check:\"; \\(Get-Command winget -ErrorAction SilentlyContinue\\).Source)",
+      "PowerShell(winget install --id Git.Git -e --source winget --accept-source-agreements --accept-package-agreements)",
+      "PowerShell($git = \"C:\\\\Program Files\\\\Git\\\\cmd\\\\git.exe\"; & $git --version; \"--- name set?\"; & $git config --global user.name; \"--- email set?\"; & $git config --global user.email)",
+      "PowerShell($git = \"C:\\\\Program Files\\\\Git\\\\cmd\\\\git.exe\"; & $git config --global user.name \"vasanthjoel\"; & $git config --global user.email \"vasanthjoel.s@citiustech.com\"; & $git config --global init.defaultBranch main; \"Identity set:\"; & $git config --global user.name; & $git config --global user.email)",
+      "PowerShell(Get-ChildItem -Force -Name | Where-Object { $_ -match '^\\\\.git|gitignore|\\\\.env$' }; \"--- any real .env?\"; if \\(Test-Path .env\\) { \"YES .env exists\" } else { \"no .env\" })",
+      "PowerShell($git = \"C:\\\\Program Files\\\\Git\\\\cmd\\\\git.exe\"; & $git init; & $git add .; \"--- Files staged:\"; & $git status --short)"
+    ]
+  }
+}

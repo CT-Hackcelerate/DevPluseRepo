@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(py --version)",
+      "PowerShell(py -m pytest \"c:\\\\Users\\\\VasanthJoelS\\\\Desktop\\\\TokenOptimizer\\\\tests\\\\test_optimize.py\" -v 2>&1)",
+      "PowerShell(python -c \"import anthropic; print\\('anthropic', anthropic.__version__\\)\")",
+      "PowerShell(python -c \"import docx; print\\('python-docx OK'\\)\")",
+      "PowerShell(python -c \"import tkinter; print\\('tkinter OK'\\)\")",
+      "PowerShell($cmds = 'py','python3','python'; foreach \\($c in $cmds\\) { $g = Get-Command $c -ErrorAction SilentlyContinue; if \\($g\\) { \"$c -> $\\($g.Source\\)\" } }; Write-Output \"---py version---\"; try { py --version } catch { \"no py launcher\" })",
+      "PowerShell($py = \"C:\\\\Python314\\\\python.exe\"; & $py --version; Write-Output \"---\"; & $py -c \"import tkinter; print\\('tkinter OK'\\)\"; & $py -c \"import anthropic; print\\('anthropic OK'\\)\" ; & $py -c \"import docx; print\\('python-docx OK'\\)\")",
+      "Read(//c/Python314/**)",
+      "Read(//c/Python314/Scripts/**)",
+      "PowerShell(winget install --id Python.Python.3.12 --source winget --accept-source-agreements --accept-package-agreements --silent)",
+      "PowerShell($vpy = \".\\\\.venv\\\\Scripts\\\\python.exe\"; & $vpy -m pytest tests/ -v)"
+    ]
+  }
+}
