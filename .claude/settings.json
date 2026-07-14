@@ -19,7 +19,11 @@
       "Bash(cmd //c \"run.bat demo --help\")",
       "Bash(cmd //c \"C:\\\\Users\\\\VasanthJoelS\\\\Desktop\\\\TokenOptimizer\\\\run.bat optimize-doc --help\")",
       "Bash(cmd //c \"C:\\\\Users\\\\VasanthJoelS\\\\Desktop\\\\TokenOptimizer\\\\run.bat optimize-doc --file sample_document.docx\")",
-      "Bash(grep -E \"^\\\\.env$\")"
+      "Bash(grep -E \"^\\\\.env$\")",
+      "Bash(cmd //c \"C:\\\\Users\\\\VasanthJoelS\\\\Desktop\\\\TokenOptimizer\\\\run.bat optimize-doc --file \\\\\"Jira issue sample.txt\\\\\" --summarize\")",
+      "Bash(./.venv/Scripts/python.exe -m token_optimizer.cli optimize-doc --file \"Jira issue sample.txt\" --summarize)",
+      "Bash(./.venv/Scripts/pythonw.exe -m token_optimizer.cli ui)",
+      "Bash(tasklist //FI \"IMAGENAME eq pythonw.exe\")"
     ],
     "additionalDirectories": [
       "\\tmp"
