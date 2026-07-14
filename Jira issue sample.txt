@@ -1,0 +1,47 @@
+Sure! Here’s an example of a Jira issue content you could use — I’ll make it clear, concise, and ready to paste into Jira.
+
+Summary:
+Login page throws error when valid credentials are entered
+Issue Type:
+Bug
+Priority:
+High
+Description:
+When a user enters valid credentials on the login page, the system returns a 500 Internal Server Error instead of redirecting to the dashboard. This issue affects all browsers and prevents users from accessing their accounts.
+Steps to Reproduce:
+
+Navigate to the login page.
+
+
+Enter a valid username and password.
+
+
+Click the Login button.
+
+Expected Result:
+User is redirected to the dashboard.
+Actual Result:
+A 500 Internal Server Error message is displayed.
+Environment:
+
+OS: Windows 11 / macOS Ventura
+
+
+Browsers: Chrome 126, Firefox 118
+
+
+App Version: v2.3.1
+
+Attachments:
+
+Screenshot of error message
+
+
+Server log excerpt
+
+Assignee:
+[Leave blank or assign to backend developer]
+Labels:
+login, critical, backend
+
+If you’d like, I can also create two more Jira issue templates — one for a feature request and one for a task — so you have a complete set for your project. Would you like me to prepare those?

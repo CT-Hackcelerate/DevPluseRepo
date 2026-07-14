@@ -70,8 +70,15 @@ def launch() -> int:
         _set_text(optimized_box, "")
         for var in (raw_var, opt_var, saved_var, method_var):
             var.set("—")
-        stats_var.set(f"{label} — {len(text):,} chars loaded. Click 'Optimize'.")
         optimize_btn.config(state="normal" if text else "disabled")
+        if text:
+            # Optimize immediately so the token-savings numbers appear without
+            # requiring an extra click. Deferred so the "Original" pane paints
+            # first. Re-run manually after toggling 'Summarize'.
+            stats_var.set(f"{label} — {len(text):,} chars loaded. Optimizing…")
+            root.after(50, run_optimize)
+        else:
+            stats_var.set(f"{label} — nothing to optimize.")
 
     def _run_bg(work, on_ok, *, busy: str) -> None:
         stats_var.set(busy)
