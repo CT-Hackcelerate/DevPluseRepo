@@ -206,10 +206,13 @@ def launch() -> int:
     controls.pack(fill="x")
 
     summarize_var = tk.BooleanVar(value=False)
-    api_note = "" if config.anthropic_api_key else "  (no API key: compression only, estimated tokens)"
+    if config.anthropic_api_key:
+        summarize_label = "Summarize with Claude (Haiku)"
+    else:
+        summarize_label = "Summarize (no API key: offline extractive summary)"
     ttk.Checkbutton(
         controls,
-        text="Summarize with Claude (needs API key)" + api_note,
+        text=summarize_label,
         variable=summarize_var,
     ).pack(side="left")
 
@@ -282,7 +285,12 @@ def launch() -> int:
         raw_var.set(f"{result.raw_tokens:,}")
         opt_var.set(f"{result.optimized_tokens:,}")
         saved_var.set(f"{result.tokens_saved:,}  ({result.reduction_pct:.1f}%)")
-        method_var.set("API count_tokens" if result.token_method == "api" else "local estimate")
+        method_labels = {
+            "api": "API count_tokens",
+            "tiktoken": "local tiktoken",
+            "estimate": "local estimate",
+        }
+        method_var.set(method_labels.get(result.token_method, result.token_method))
         stats_var.set(
             f"Done. Stages: {', '.join(result.stages) or 'none'}   |   saved to: {OUTPUT_FILE.name}"
         )

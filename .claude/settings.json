@@ -11,7 +11,13 @@
       "Read(//c/Python314/**)",
       "Read(//c/Python314/Scripts/**)",
       "PowerShell(winget install --id Python.Python.3.12 --source winget --accept-source-agreements --accept-package-agreements --silent)",
-      "PowerShell($vpy = \".\\\\.venv\\\\Scripts\\\\python.exe\"; & $vpy -m pytest tests/ -v)"
+      "PowerShell($vpy = \".\\\\.venv\\\\Scripts\\\\python.exe\"; & $vpy -m pytest tests/ -v)",
+      "Bash(python -m pytest tests/test_optimize.py -q)",
+      "Bash(python -c ' *)",
+      "Bash(pip show *)",
+      "Bash(cmd //c \"run.bat --help\")",
+      "Bash(cmd //c \"run.bat demo --help\")",
+      "Bash(cmd //c \"C:\\\\Users\\\\VasanthJoelS\\\\Desktop\\\\TokenOptimizer\\\\run.bat optimize-doc --help\")"
     ]
   }
 }

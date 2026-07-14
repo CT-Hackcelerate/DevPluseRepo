@@ -17,13 +17,14 @@ tokenopt ui
 
 # Command line: optimize a document, write optimized_output.txt to the current folder
 tokenopt optimize-doc --file report.docx
-tokenopt optimize-doc --file notes.txt --summarize   # add a Claude Haiku summary pass
+tokenopt optimize-doc --file notes.txt --summarize   # add a summary pass (Haiku, or offline extractive with no key)
 ```
 
 - **Source**: [`integrations/document.py`](src/token_optimizer/integrations/document.py) reads `.docx` (via `python-docx`), `.txt`, and `.md`.
-- **Optimizer**: [`optimize/text_pipeline.py`](src/token_optimizer/optimize/text_pipeline.py) runs prose-aware compression, then optional Haiku summarization.
+- **Optimizer**: [`optimize/text_pipeline.py`](src/token_optimizer/optimize/text_pipeline.py) runs, all offline: deterministic reductions ([`optimize/local.py`](src/token_optimizer/optimize/local.py) — Unicode→ASCII, boilerplate/page-number stripping, decorative-punctuation and filler-phrase collapse, paragraph dedup), then whitespace/dedupe compression, then an optional summary pass. With `--summarize` the pass uses Claude Haiku when a key is set, else a no-LLM extractive (TextRank-style) summarizer so the big win still works offline.
+- **Minimal request**: `build_prompt_request()` assembles the smallest reasonable Messages-API request — cached system prefix + terse task + optimized data under one compact delimiter.
 - **Output**: the optimized text (with a savings header) is written to `optimized_output.txt` in the root/working folder.
-- **Tokens**: counted with the API's `count_tokens` when `ANTHROPIC_API_KEY` is set; otherwise a local estimate ([`optimize/tokens.py`](src/token_optimizer/optimize/tokens.py)) so compression works fully offline.
+- **Tokens**: counted with the API's `count_tokens` when `ANTHROPIC_API_KEY` is set; otherwise offline via `tiktoken` (real BPE), falling back to a char/word estimate if `tiktoken` isn't installed ([`optimize/tokens.py`](src/token_optimizer/optimize/tokens.py)). The whole pipeline works fully offline.
 - **UI**: [`ui.py`](src/token_optimizer/ui.py) — a dependency-free Tkinter app.
 
 ### Connecting to JIRA and Git in the UI
