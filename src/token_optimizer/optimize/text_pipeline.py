@@ -20,6 +20,7 @@ from ..llm.cache import ResponseCache
 from ..llm.client import ClaudeClient
 from .compress import compress_prose
 from .local import extractive_summary, reduce_text
+from .local_model import get_local_summarizer
 from .summarize import _SUMMARY_SYSTEM
 from .tokens import count_tokens_offline
 
@@ -78,6 +79,24 @@ class TextOptimizer:
                 cache=cache,
             )
 
+    def _local_or_extractive(self, text: str, ratio: float, stages: list[str]) -> str:
+        """No cloud key: try a local Ollama model (abstractive), else extractive.
+
+        Records ``local-model-summarize`` or ``extractive-summarize`` in ``stages``
+        depending on which tier actually ran and changed the text.
+        """
+        summarizer = get_local_summarizer(self.config.local_model, self.config.local_model_url)
+        if summarizer is not None:
+            out = summarizer.summarize(text)
+            if out and out != text:
+                stages.append("local-model-summarize")
+                return out
+            # Local model configured but produced nothing usable — fall through.
+        summarized = extractive_summary(text, ratio=ratio)
+        if summarized != text:
+            stages.append("extractive-summarize")
+        return summarized
+
     def _count(self, text: str) -> tuple[int, str]:
         """Return (token_count, method): API-exact if a key is set, else offline."""
         if self.client is not None:
@@ -101,11 +120,12 @@ class TextOptimizer:
     ) -> TextOptimizationResult:
         """Run the optimization strategies over ``text``.
 
-        Deterministic reductions (unicode fold, boilerplate strip, punctuation and
-        filler collapse, paragraph dedup, whitespace) always run offline. With
-        ``summarize=True`` a Haiku pass produces a dense agent-ready summary when an
-        API key is set; with no key it falls back to offline extractive
-        summarization so the option still works — the biggest saving on long docs.
+        Deterministic reductions (unicode fold, framing/boilerplate strip, field
+        collapsing, punctuation and filler collapse, paragraph dedup) always run
+        offline. With ``summarize=True`` the summary tier is chosen by what's
+        available, best first: Claude Haiku (API key) → a local Ollama model
+        (``TOKENOPT_LOCAL_MODEL``, abstractive, no cloud tokens) → the deterministic
+        entity-anchored extractive summarizer.
         """
         stages: list[str] = []
         raw_tokens, _ = self._count(text)
@@ -117,7 +137,6 @@ class TextOptimizer:
         # Strategy 2 — summarization (optional). Runs BEFORE line-level compression
         # so it sees clean, sentence-structured text — the extractive summarizer's
         # sentence splitter would otherwise choke on compression's line mangling.
-        # LLM (Haiku) when a key is set, else the offline extractive summarizer.
         if summarize:
             if self.client is not None:
                 optimized = self.client.complete(
@@ -130,9 +149,7 @@ class TextOptimizer:
                 )
                 stages.append("summarize")
             else:
-                summarized = extractive_summary(optimized, ratio=summary_ratio)
-                if summarized != optimized:
-                    stages.append("extractive-summarize")
+                summarized = self._local_or_extractive(optimized, summary_ratio, stages)
                 optimized = summarized
 
         # Strategy 3 — whitespace/dedupe/truncate compression (always, offline).

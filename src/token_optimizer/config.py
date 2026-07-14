@@ -29,6 +29,13 @@ class Config:
     )
     cache_dir: str = field(default_factory=lambda: _env("TOKENOPT_CACHE_DIR", ".tokenopt_cache"))
 
+    # Optional local model (Ollama) for abstractive summarization with no cloud
+    # tokens. Set TOKENOPT_LOCAL_MODEL to a pulled model name (e.g. "llama3.2").
+    local_model: str = field(default_factory=lambda: _env("TOKENOPT_LOCAL_MODEL"))
+    local_model_url: str = field(
+        default_factory=lambda: _env("TOKENOPT_LOCAL_MODEL_URL", "http://localhost:11434")
+    )
+
     # JIRA
     jira_base_url: str = field(default_factory=lambda: _env("JIRA_BASE_URL"))
     jira_email: str = field(default_factory=lambda: _env("JIRA_EMAIL"))

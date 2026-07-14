@@ -18,7 +18,8 @@
       "Bash(cmd //c \"run.bat --help\")",
       "Bash(cmd //c \"run.bat demo --help\")",
       "Bash(cmd //c \"C:\\\\Users\\\\VasanthJoelS\\\\Desktop\\\\TokenOptimizer\\\\run.bat optimize-doc --help\")",
-      "Bash(cmd //c \"C:\\\\Users\\\\VasanthJoelS\\\\Desktop\\\\TokenOptimizer\\\\run.bat optimize-doc --file sample_document.docx\")"
+      "Bash(cmd //c \"C:\\\\Users\\\\VasanthJoelS\\\\Desktop\\\\TokenOptimizer\\\\run.bat optimize-doc --file sample_document.docx\")",
+      "Bash(grep -E \"^\\\\.env$\")"
     ],
     "additionalDirectories": [
       "\\tmp"

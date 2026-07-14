@@ -19,6 +19,7 @@ from token_optimizer.optimize.tokens import (  # noqa: E402
     estimate_tokens,
 )
 from token_optimizer.optimize.local import (  # noqa: E402
+    collapse_field_blocks,
     collapse_punctuation,
     dedupe_paragraphs,
     extractive_summary,
@@ -26,6 +27,7 @@ from token_optimizer.optimize.local import (  # noqa: E402
     reduce_text,
     split_sentences,
     strip_boilerplate,
+    strip_conversational_framing,
     substitute_fillers,
 )
 from token_optimizer.optimize.text_pipeline import (  # noqa: E402
@@ -176,6 +178,60 @@ def test_dedupe_paragraphs_removes_near_duplicates():
     assert "Final." in out
 
 
+def test_strip_conversational_framing():
+    text = (
+        "Sure! Here's an example you could use.\n"
+        "Summary: Login fails with 500 error.\n"
+        "If you'd like, I can also create more templates.\n"
+        "Would you like me to prepare those?"
+    )
+    out = strip_conversational_framing(text)
+    assert "Summary: Login fails with 500 error." in out
+    assert "Sure!" not in out
+    assert "If you'd like" not in out
+    assert "Would you like" not in out
+
+
+def test_collapse_field_blocks_folds_labels_and_drops_placeholder():
+    text = (
+        "Summary:\n"
+        "Login page throws error\n"
+        "\n"
+        "Priority:\n"
+        "High\n"
+        "\n"
+        "Steps to Reproduce:\n"
+        "Open login.\n"
+        "\n"
+        "Click submit.\n"
+        "\n"
+        "Assignee:\n"
+        "[Leave blank or assign to backend developer]\n"
+    )
+    out = collapse_field_blocks(text)
+    assert "Summary: Login page throws error" in out
+    assert "Priority: High" in out
+    assert "Steps to Reproduce: Open login.; Click submit." in out
+    assert "Assignee" not in out            # placeholder-only field dropped
+    assert "Leave blank" not in out
+    assert len(out) < len(text)
+
+
+def test_extractive_summary_anchors_must_keep_entities():
+    # The version/error-code sentences must survive even though they'd score low.
+    sentences = [
+        "The team met on Monday to discuss the roadmap and goals for the quarter.",
+        "Everyone agreed the roadmap looked good and the goals were clear.",
+        "The build crashed with error 500 in checkout on app version v2.3.1.",
+        "We had coffee and talked about the roadmap goals again afterwards.",
+        "The roadmap goals were reviewed one final time before the meeting ended.",
+    ]
+    text = " ".join(sentences)
+    summary = extractive_summary(text, ratio=0.2, min_sentences=1)
+    assert "500" in summary            # error code anchored in
+    assert "v2.3.1" in summary          # version anchored in
+
+
 def test_reduce_text_reports_only_fired_stages():
     text = "Clean prose with nothing to reduce here."
     _, stages = reduce_text(text)
@@ -231,6 +287,21 @@ def test_build_prompt_request_omits_empty_system():
     req = build_prompt_request("data only")
     assert "system" not in req
     assert "<data>" in req["messages"][0]["content"]
+
+
+def test_get_local_summarizer_none_when_unconfigured():
+    from token_optimizer.optimize.local_model import get_local_summarizer
+
+    assert get_local_summarizer("") is None  # no model configured → no local tier
+
+
+def test_local_summarizer_unreachable_returns_none():
+    from token_optimizer.optimize.local_model import LocalModelSummarizer
+
+    # Point at a port nothing is listening on — must degrade, never raise.
+    s = LocalModelSummarizer(model="nope", base_url="http://localhost:59999", timeout=1.0)
+    assert s.available() is False
+    assert s.summarize("some text") is None
 
 
 def test_text_optimizer_offline_extractive_summarize():

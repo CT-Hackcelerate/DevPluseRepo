@@ -168,6 +168,77 @@ def dedupe_paragraphs(text: str) -> str:
     return "\n\n".join(out)
 
 
+# ── Task A.6 — conversational / LLM framing removal ─────────────────────────
+
+# Lines/sentences that are pure conversational packaging — common in
+# LLM-generated or human-authored text, zero signal for a downstream agent.
+_FRAMING_PATTERNS = [
+    re.compile(r"^\s*(sure|certainly|absolutely|of course|great|no problem)[!,. ].*", re.IGNORECASE),
+    re.compile(r"^\s*here('?s| is| are)\b.*", re.IGNORECASE),
+    re.compile(r"^\s*(i|i'?ll|i can|i would|let me)\b.*\b(help|create|prepare|make|provide|show|explain)\b.*", re.IGNORECASE),
+    re.compile(r"^\s*(if you('?d| would)? like|would you like|let me know|feel free|hope this helps|i hope|please let me know)\b.*", re.IGNORECASE),
+    re.compile(r"^\s*(as an ai|i'?m an ai|as a language model)\b.*", re.IGNORECASE),
+    re.compile(r"^\s*(in (summary|conclusion|short)|to summari[sz]e|overall)[,: ].*", re.IGNORECASE),
+]
+# Trailing follow-up questions ("Would you like ...?") — drop whole sentence.
+_FRAMING_SENTENCE = re.compile(
+    r"(?:^|\s)((?:would you like|shall i|do you want|should i|can i help)[^.?!]*\?)",
+    re.IGNORECASE,
+)
+
+
+def strip_conversational_framing(text: str) -> str:
+    """Remove conversational preamble, sign-offs, and follow-up offers."""
+    kept = [ln for ln in text.split("\n") if not any(p.match(ln) for p in _FRAMING_PATTERNS)]
+    out = "\n".join(kept)
+    return _FRAMING_SENTENCE.sub("", out).strip()
+
+
+# ── Task A.7 — structure-aware field extraction ─────────────────────────────
+
+# A "label-only" line: a short title followed by a colon and nothing else, e.g.
+# "Summary:", "Steps to Reproduce:". The value lives on the following line(s).
+_LABEL_ONLY = re.compile(r"^\s*([A-Z][A-Za-z0-9 /()&-]{0,38}):\s*$")
+# A placeholder value with no real content — drop the whole field.
+_PLACEHOLDER = re.compile(r"^\s*[\[(].*(leave blank|tbd|n/?a|optional|fill in|assign).*[\])]\s*$", re.IGNORECASE)
+
+
+def collapse_field_blocks(text: str) -> str:
+    """Collapse ``Label:`` / value-on-next-lines blocks into tight ``label: value``.
+
+    Structured issue text (Jira tickets, bug reports) spends most of its tokens on
+    blank lines and label/value line breaks. Folding each block onto one line —
+    ``Summary:\\ntext`` → ``Summary: text`` — and joining multi-line values with
+    "; " removes that structural overhead while keeping every field intact.
+    Fields whose only value is a placeholder are dropped entirely.
+    """
+    lines = text.split("\n")
+    out: list[str] = []
+    i = 0
+    changed = False
+    while i < len(lines):
+        m = _LABEL_ONLY.match(lines[i])
+        if not m:
+            out.append(lines[i])
+            i += 1
+            continue
+        label = m.group(1).strip()
+        # Gather value lines until the next label-only line (or end).
+        i += 1
+        values: list[str] = []
+        while i < len(lines) and not _LABEL_ONLY.match(lines[i]):
+            val = lines[i].strip()
+            if val and not _PLACEHOLDER.match(val):
+                values.append(val)
+            i += 1
+        changed = True
+        if values:
+            out.append(f"{label}: {'; '.join(values)}")
+        # else: field had no real value — drop it entirely.
+    result = "\n".join(out)
+    return result if changed else text
+
+
 # ── Task A — full deterministic reduction ───────────────────────────────────
 
 
@@ -180,7 +251,9 @@ def reduce_text(text: str) -> tuple[str, list[str]]:
     stages: list[str] = []
     steps = [
         ("unicode", normalize_unicode),
+        ("framing", strip_conversational_framing),
         ("boilerplate", strip_boilerplate),
+        ("fields", collapse_field_blocks),
         ("punctuation", collapse_punctuation),
         ("filler", substitute_fillers),
         ("dedupe-paragraphs", dedupe_paragraphs),
@@ -245,10 +318,34 @@ def _sentence_scores(sentences: list[str]) -> list[float]:
     return scores
 
 
+# Must-keep entities: dropping a sentence that carries one of these usually loses
+# a fact an agent needs (error codes, versions, IDs, labels, paths, numbers).
+_MUST_KEEP = re.compile(
+    r"""(
+        \b\d{3,}\b                     # status/error codes, counts (500, 404, 1234)
+        | \bv?\d+\.\d+(\.\d+)?\b        # versions (2.3.1, v1.0)
+        | \b[A-Z]{2,}-\d+\b            # issue keys (ABC-123)
+        | \b[A-Z][a-z]+[A-Z]\w*\b     # CamelCase identifiers (NullPointerException)
+        | \b\w+\.(py|js|ts|java|go|rb|cs|cpp|json|yaml|yml|log|txt)\b  # file paths
+        | https?://\S+                 # URLs
+        | \b\w+@\w+\.\w+\b            # emails
+        | \b[A-Za-z]:\\|/\w+/\w+       # windows/unix paths
+    )""",
+    re.VERBOSE,
+)
+
+
+def _has_must_keep(sentence: str) -> bool:
+    return bool(_MUST_KEEP.search(sentence))
+
+
 def extractive_summary(text: str, *, ratio: float = 0.35, min_sentences: int = 3) -> str:
     """Keep the top-ranked sentences (in original order) — no LLM required.
 
-    ``ratio`` is the fraction of sentences to keep. Sentence order is preserved so
+    ``ratio`` is the fraction of sentences to keep. Sentences carrying a must-keep
+    entity (error codes, versions, IDs, file paths, URLs, labels) are *always*
+    retained so summarization never silently drops a fact an agent needs; the
+    remaining budget is filled by centrality score. Sentence order is preserved so
     the summary still reads coherently. Below ``min_sentences`` the text is
     returned unchanged — there's nothing to gain from summarizing a few lines.
     """
@@ -260,7 +357,20 @@ def extractive_summary(text: str, *, ratio: float = 0.35, min_sentences: int = 3
     if keep >= len(sentences):
         return text.strip()
 
+    # 1. Anchor: every sentence with a must-keep entity is retained outright.
+    anchored = {i for i, s in enumerate(sentences) if _has_must_keep(s)}
+
+    # 2. Fill the rest of the budget by centrality score.
     scores = _sentence_scores(sentences)
-    ranked = sorted(range(len(sentences)), key=lambda i: scores[i], reverse=True)[:keep]
-    chosen = sorted(ranked)
-    return " ".join(sentences[i] for i in chosen)
+    remaining = [i for i in range(len(sentences)) if i not in anchored]
+    remaining.sort(key=lambda i: scores[i], reverse=True)
+
+    chosen = set(anchored)
+    for i in remaining:
+        if len(chosen) >= keep:
+            break
+        chosen.add(i)
+
+    # If anchors alone already exceed the budget, keep them all — losing a fact is
+    # worse than exceeding the target ratio.
+    return " ".join(sentences[i] for i in sorted(chosen))
