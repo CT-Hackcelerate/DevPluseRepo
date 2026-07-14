@@ -23,7 +23,14 @@
       "Bash(cmd //c \"C:\\\\Users\\\\VasanthJoelS\\\\Desktop\\\\TokenOptimizer\\\\run.bat optimize-doc --file \\\\\"Jira issue sample.txt\\\\\" --summarize\")",
       "Bash(./.venv/Scripts/python.exe -m token_optimizer.cli optimize-doc --file \"Jira issue sample.txt\" --summarize)",
       "Bash(./.venv/Scripts/pythonw.exe -m token_optimizer.cli ui)",
-      "Bash(tasklist //FI \"IMAGENAME eq pythonw.exe\")"
+      "Bash(tasklist //FI \"IMAGENAME eq pythonw.exe\")",
+      "Bash(xargs cat)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('src/token_optimizer/ui.py'\\).read\\(\\)\\); ast.parse\\(open\\('src/token_optimizer/cli.py'\\).read\\(\\)\\); ast.parse\\(open\\('src/token_optimizer/run_log.py'\\).read\\(\\)\\); print\\('syntax OK for ui/cli/run_log'\\)\")",
+      "Bash(./.venv/Scripts/python.exe -c ' *)",
+      "Bash(./.venv/Scripts/python.exe -m pip install reportlab --quiet)",
+      "Bash(./.venv/Scripts/python.exe -c \"import reportlab; print\\('reportlab', reportlab.Version\\)\")",
+      "Bash(./.venv/Scripts/python.exe scripts/generate_docs_pdf.py)",
+      "Bash(rm -f TokenOptimizer_Documentation.pdf)"
     ],
     "additionalDirectories": [
       "\\tmp"

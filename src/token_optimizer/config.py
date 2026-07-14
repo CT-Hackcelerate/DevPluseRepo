@@ -28,6 +28,7 @@ class Config:
         default_factory=lambda: _env("TOKENOPT_SUMMARY_MODEL", "claude-haiku-4-5")
     )
     cache_dir: str = field(default_factory=lambda: _env("TOKENOPT_CACHE_DIR", ".tokenopt_cache"))
+    log_dir: str = field(default_factory=lambda: _env("TOKENOPT_LOG_DIR", "logs"))
 
     # Optional local model (Ollama) for abstractive summarization with no cloud
     # tokens. Set TOKENOPT_LOCAL_MODEL to a pulled model name (e.g. "llama3.2").

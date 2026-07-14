@@ -9,6 +9,10 @@ saved. A small desktop **UI** lets you pick a document and view the result.
 > The same engine also drives automations over **JIRA** and DevOps tools
 > (**GitHub, Azure DevOps, GitLab, Jenkins**) — see [Automations](#real-automations) below.
 
+> 📖 **Full feature reference:** [FEATURES.md](FEATURES.md) — every optimization
+> strategy, summary tier, token-counting backend, interface, and the per-run logging.
+> Every run writes a detailed log to `logs/`.
+
 ## Document optimizer (default use case)
 
 ```powershell

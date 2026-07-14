@@ -20,14 +20,34 @@ from .config import Config
 def _cmd_optimize_doc(args: argparse.Namespace) -> int:
     """Optimize a document's text and write the result to a text file."""
     from .optimize.text_pipeline import optimize_document, write_output
+    from .run_log import log_run
 
-    result = optimize_document(Config(), args.file, summarize=args.summarize)
+    config = Config()
     out_path = args.out or os.path.join(os.getcwd(), "optimized_output.txt")
+    source = {"type": "document", "file": args.file}
+    options = {"summarize": bool(args.summarize)}
+    try:
+        result = optimize_document(config, args.file, summarize=args.summarize)
+    except Exception as exc:
+        log_path = log_run(
+            command="optimize-doc", source=source, options=options,
+            config=config, error=f"{type(exc).__name__}: {exc}",
+        )
+        if log_path:
+            print(f"Run log: {log_path}", file=sys.stderr)
+        raise
+
     write_output(result, out_path)
+    log_path = log_run(
+        command="optimize-doc", source=source, options=options,
+        result=result, config=config, output_path=out_path,
+    )
 
     print(result.optimized_text)
     print("\n" + result.summary(), file=sys.stderr)
     print(f"Optimized text written to: {out_path}", file=sys.stderr)
+    if log_path:
+        print(f"Run log written to:        {log_path}", file=sys.stderr)
     return 0
 
 
@@ -38,51 +58,75 @@ def _cmd_ui(args: argparse.Namespace) -> int:
     return launch()
 
 
+def _run_and_log(command: str, source: dict, options: dict, work) -> int:
+    """Run a triage/review ``work`` callable, print its result, and log the run."""
+    from .run_log import log_run
+
+    config = Config()
+    try:
+        result = work(config)
+    except Exception as exc:
+        log_path = log_run(
+            command=command, source=source, options=options,
+            config=config, error=f"{type(exc).__name__}: {exc}",
+        )
+        if log_path:
+            print(f"Run log: {log_path}", file=sys.stderr)
+        raise
+
+    log_path = log_run(
+        command=command, source=source, options=options,
+        result=result, config=config,
+    )
+    print(result.answer)
+    print("\n" + result.summary(), file=sys.stderr)
+    if log_path:
+        print(f"Run log written to: {log_path}", file=sys.stderr)
+    return 0
+
+
 def _cmd_triage_jira(args: argparse.Namespace) -> int:
     from .automations.triage import triage_jira
 
-    result = triage_jira(Config(), args.jql, max_results=args.max)
-    print(result.answer)
-    print("\n" + result.summary(), file=sys.stderr)
-    return 0
+    return _run_and_log(
+        "triage-jira",
+        {"type": "jira", "jql": args.jql, "max_results": args.max},
+        {"max_results": args.max},
+        lambda cfg: triage_jira(cfg, args.jql, max_results=args.max),
+    )
 
 
 def _cmd_triage_jenkins(args: argparse.Namespace) -> int:
     from .automations.triage import triage_jenkins_failure
 
-    result = triage_jenkins_failure(Config(), args.job, args.build)
-    print(result.answer)
-    print("\n" + result.summary(), file=sys.stderr)
-    return 0
+    return _run_and_log(
+        "triage-jenkins",
+        {"type": "jenkins", "job": args.job, "build": args.build},
+        {},
+        lambda cfg: triage_jenkins_failure(cfg, args.job, args.build),
+    )
 
 
 def _cmd_review_github_pr(args: argparse.Namespace) -> int:
     from .automations.github import review_pr
 
-    result = review_pr(
-        Config(),
-        args.owner,
-        args.repo,
-        args.number,
-        post_comment=args.post_comment,
+    return _run_and_log(
+        "review-github-pr",
+        {"type": "github-pr", "owner": args.owner, "repo": args.repo, "number": args.number},
+        {"post_comment": bool(args.post_comment)},
+        lambda cfg: review_pr(cfg, args.owner, args.repo, args.number, post_comment=args.post_comment),
     )
-    print(result.answer)
-    print("\n" + result.summary(), file=sys.stderr)
-    return 0
 
 
 def _cmd_triage_github_prs(args: argparse.Namespace) -> int:
     from .automations.github import triage_open_prs
 
-    result = triage_open_prs(
-        Config(),
-        args.owner,
-        args.repo,
-        include_diffs=args.diffs,
+    return _run_and_log(
+        "triage-github-prs",
+        {"type": "github-prs", "owner": args.owner, "repo": args.repo},
+        {"include_diffs": bool(args.diffs)},
+        lambda cfg: triage_open_prs(cfg, args.owner, args.repo, include_diffs=args.diffs),
     )
-    print(result.answer)
-    print("\n" + result.summary(), file=sys.stderr)
-    return 0
 
 
 def _cmd_demo(args: argparse.Namespace) -> int:

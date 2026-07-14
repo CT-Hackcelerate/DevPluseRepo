@@ -27,4 +27,7 @@ Thumbs.db
 
 # Generated output
 optimized_output.txt
-  
+
+# Per-run logs
+logs/
+

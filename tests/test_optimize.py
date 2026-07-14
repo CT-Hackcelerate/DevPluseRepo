@@ -1,5 +1,6 @@
 """Offline tests for the deterministic optimization strategies (no API needed)."""
 
+import os
 import sys
 from pathlib import Path
 
@@ -382,6 +383,78 @@ def test_render_github_pr_to_text():
     assert "author: octocat" in text
     assert "DIFF:" in text
     assert "+b" in text
+
+
+def test_run_log_writes_file_with_details(tmp_path):
+    from token_optimizer.run_log import build_record, write_run_log
+
+    cfg = Config(anthropic_api_key="")
+    text = "Repeated line\n" * 20 + "Unique payload."
+    result = TextOptimizer(cfg).optimize(text, summarize=False)
+    record = build_record(
+        command="optimize-doc",
+        source={"type": "document", "file": "x.txt"},
+        options={"summarize": False},
+        result=result,
+        config=cfg,
+        output_path="out.txt",
+    )
+    path = write_run_log(record, str(tmp_path))
+    assert path and os.path.exists(path)
+    content = Path(path).read_text(encoding="utf-8")
+    # Human-readable report + machine-parseable JSON block both present.
+    assert "TokenOptimizer — run log" in content
+    assert "--- JSON ---" in content
+    assert "raw_tokens" in content
+    assert "duration_ms" in content
+    assert record["metrics"]["raw_tokens"] == result.raw_tokens
+
+
+def test_run_log_never_logs_secrets(tmp_path):
+    from token_optimizer.run_log import build_record, write_run_log
+
+    secret = "sk-ant-SECRET-VALUE-123"
+    cfg = Config(anthropic_api_key=secret, jira_api_token="jira-secret", github_token="gh-secret")
+    record = build_record(
+        command="triage-jira",
+        source={"type": "jira", "jql": "project = ABC"},
+        options={},
+        config=cfg,
+    )
+    path = write_run_log(record, str(tmp_path))
+    content = Path(path).read_text(encoding="utf-8")
+    assert secret not in content
+    assert "jira-secret" not in content
+    assert "gh-secret" not in content
+    # But the fact that a key was configured IS recorded (as a boolean).
+    assert record["config"]["api_key_configured"] is True
+
+
+def test_run_log_records_error(tmp_path):
+    from token_optimizer.run_log import build_record
+
+    record = build_record(
+        command="optimize-doc",
+        source={"type": "document", "file": "missing.txt"},
+        options={},
+        error="FileNotFoundError: missing.txt",
+    )
+    assert record["status"] == "error"
+    assert "FileNotFoundError" in record["error"]
+
+
+def test_optimize_result_has_tier_and_duration():
+    cfg = Config(anthropic_api_key="")
+    body = (
+        "The service crashed with error 500 in checkout. "
+        "The weather is nice today outside. "
+        "The checkout error 500 happens on the payment handler. "
+        "Someone brought snacks to the office. "
+        "Checkout payment failures rose after the deploy."
+    )
+    r = TextOptimizer(cfg).optimize(body, summarize=True, summary_ratio=0.5)
+    assert r.summary_tier in {"extractive", "local-model"}
+    assert r.duration_ms >= 0.0
 
 
 def test_response_cache_roundtrip(tmp_path):

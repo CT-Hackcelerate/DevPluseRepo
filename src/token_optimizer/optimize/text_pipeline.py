@@ -40,6 +40,8 @@ class TextOptimizationResult:
     token_method: str  # "api" | "tiktoken" | "estimate"
     stages: list[str] = field(default_factory=list)
     estimated_cost_usd: float = 0.0
+    summary_tier: str = "none"  # "haiku" | "local-model" | "extractive" | "none"
+    duration_ms: float = 0.0
 
     @property
     def tokens_saved(self) -> int:
@@ -127,7 +129,11 @@ class TextOptimizer:
         (``TOKENOPT_LOCAL_MODEL``, abstractive, no cloud tokens) → the deterministic
         entity-anchored extractive summarizer.
         """
+        import time
+
+        started = time.perf_counter()
         stages: list[str] = []
+        summary_tier = "none"
         raw_tokens, _ = self._count(text)
 
         # Strategy 1 — deterministic offline reductions (Task A).
@@ -148,9 +154,15 @@ class TextOptimizer:
                     adaptive_thinking=False,
                 )
                 stages.append("summarize")
+                summary_tier = "haiku"
             else:
-                summarized = self._local_or_extractive(optimized, summary_ratio, stages)
-                optimized = summarized
+                before = list(stages)
+                optimized = self._local_or_extractive(optimized, summary_ratio, stages)
+                added = [s for s in stages if s not in before]
+                if "local-model-summarize" in added:
+                    summary_tier = "local-model"
+                elif "extractive-summarize" in added:
+                    summary_tier = "extractive"
 
         # Strategy 3 — whitespace/dedupe/truncate compression (always, offline).
         # Last pass: tidies whitespace and enforces the char cap on whatever
@@ -162,6 +174,7 @@ class TextOptimizer:
 
         optimized_tokens, token_method = self._count(optimized)
         cost = self.client.estimate_cost() if self.client is not None else 0.0
+        duration_ms = (time.perf_counter() - started) * 1000.0
 
         return TextOptimizationResult(
             raw_text=text,
@@ -171,6 +184,8 @@ class TextOptimizer:
             token_method=token_method,
             stages=stages,
             estimated_cost_usd=cost,
+            summary_tier=summary_tier,
+            duration_ms=duration_ms,
         )
 
 
