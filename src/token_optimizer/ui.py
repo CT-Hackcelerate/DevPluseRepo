@@ -380,7 +380,10 @@ def launch() -> int:
     act_row = ttk.Frame(act_card, style="Card.TFrame")
     act_row.pack(fill="x")
 
-    summarize_var = tk.BooleanVar(value=False)
+    # Default ON when offline (extractive summary is free and gives the biggest
+    # reduction). Default OFF when an API key is set so auto-optimize on load
+    # doesn't spend cloud tokens without the user asking.
+    summarize_var = tk.BooleanVar(value=not config.anthropic_api_key)
     if config.anthropic_api_key:
         summarize_label = "Summarize with Claude (Haiku)"
     elif config.local_model:

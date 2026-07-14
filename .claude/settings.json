@@ -30,7 +30,10 @@
       "Bash(./.venv/Scripts/python.exe -m pip install reportlab --quiet)",
       "Bash(./.venv/Scripts/python.exe -c \"import reportlab; print\\('reportlab', reportlab.Version\\)\")",
       "Bash(./.venv/Scripts/python.exe scripts/generate_docs_pdf.py)",
-      "Bash(rm -f TokenOptimizer_Documentation.pdf)"
+      "Bash(rm -f TokenOptimizer_Documentation.pdf)",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
     ],
     "additionalDirectories": [
       "\\tmp"
