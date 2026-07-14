@@ -140,9 +140,16 @@ class TextOptimizer:
         optimized, reduce_stages = reduce_text(text)
         stages.extend(reduce_stages)
 
-        # Strategy 2 — summarization (optional). Runs BEFORE line-level compression
-        # so it sees clean, sentence-structured text — the extractive summarizer's
-        # sentence splitter would otherwise choke on compression's line mangling.
+        # Strategy 2 — whitespace/dedupe compression, run BEFORE summarization so
+        # repeated lines (huge in logs/boilerplate) are collapsed and can't survive
+        # into — or dominate — the summary. Without this, summarizing a
+        # duplicate-heavy document produced a WORSE result than not summarizing.
+        compressed_changed = False
+        pre = compress_prose(optimized, max_chars=max_chars)
+        compressed_changed = compressed_changed or pre != optimized
+        optimized = pre
+
+        # Strategy 3 — summarization (optional).
         if summarize:
             if self.client is not None:
                 optimized = self.client.complete(
@@ -164,13 +171,13 @@ class TextOptimizer:
                 elif "extractive-summarize" in added:
                     summary_tier = "extractive"
 
-        # Strategy 3 — whitespace/dedupe/truncate compression (always, offline).
-        # Last pass: tidies whitespace and enforces the char cap on whatever
-        # (possibly summarized) text remains.
-        compressed = compress_prose(optimized, max_chars=max_chars)
-        if compressed != optimized:
+        # Final compression pass — tidy whitespace and enforce the char cap on the
+        # (possibly summarized) text.
+        post = compress_prose(optimized, max_chars=max_chars)
+        compressed_changed = compressed_changed or post != optimized
+        optimized = post
+        if compressed_changed:
             stages.append("compress")
-        optimized = compressed
 
         optimized_tokens, token_method = self._count(optimized)
         cost = self.client.estimate_cost() if self.client is not None else 0.0
