@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en" data-palette="#2a78d6,#1baf7a">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TokenOptimizer — A/B Validation Dashboard</title>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface-1: #fcfcfb;
+    --text-primary: #0b0b0b; --text-secondary: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --border: rgba(11,11,11,0.10);
+    --good: #006300;
+    --series-1: #2a78d6; --series-2: #1baf7a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface-1: #1a1a19;
+      --text-primary: #ffffff; --text-secondary: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --border: rgba(255,255,255,0.10);
+      --good: #0ca30c;
+      --series-1: #3987e5; --series-2: #199e70;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface-1: #1a1a19;
+    --text-primary: #ffffff; --text-secondary: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --border: rgba(255,255,255,0.10);
+    --good: #0ca30c;
+    --series-1: #3987e5; --series-2: #199e70;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .viz-root { background: var(--page); color: var(--text-primary);
+    min-height: 100vh; padding: 32px clamp(16px, 5vw, 64px); }
+  header { display: flex; align-items: baseline; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; }
+  .sub { color: var(--text-secondary); font-size: 13px; margin: 2px 0 24px; }
+  .toggle { font: inherit; font-size: 12px; color: var(--text-secondary);
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px; margin-bottom: 28px; }
+  .kpi { background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px 18px; }
+  .kpi-label { color: var(--text-secondary); font-size: 12px; margin-bottom: 6px; }
+  .kpi-val { font-size: 30px; font-weight: 600; }
+  .kpi.hero .kpi-val { font-size: 48px; line-height: 1; }
+  .kpi-val.good { color: var(--good); }
+  .card { background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 20px 12px; margin-bottom: 22px; }
+  .card h2 { font-size: 15px; font-weight: 600; margin: 0 0 2px; }
+  .card .note { color: var(--text-secondary); font-size: 12px; margin: 0 0 8px; }
+  .chart { width: 100%; height: auto; display: block; }
+  .grid { stroke: var(--grid); stroke-width: 1; }
+  .tick { fill: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+  .xlabel { fill: var(--text-secondary); font-size: 10.5px; }
+  .vlabel { fill: var(--text-secondary); font-size: 9px; font-variant-numeric: tabular-nums; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 6px; }
+  .key { display: inline-flex; align-items: center; gap: 7px;
+    color: var(--text-secondary); font-size: 12px; }
+  .swatch { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  table.data { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.data th, table.data td { text-align: right; padding: 7px 10px;
+    border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+  table.data th:first-child, table.data td:first-child,
+  table.data th:nth-child(2), table.data td:nth-child(2) { text-align: left;
+    font-variant-numeric: normal; }
+  table.data th { color: var(--text-secondary); font-weight: 600; }
+  table.data td.good, table.data th.good { color: var(--good); }
+</style>
+</head>
+<body>
+<div class="viz-root">
+  <header>
+    <div>
+      <h1>Token Optimisation — A/B Validation</h1>
+    </div>
+    <button class="toggle" id="themeToggle" type="button">Toggle theme</button>
+  </header>
+  <p class="sub">Baseline (raw PRD &rarr; single premium model, no anchoring) vs
+    optimised (compressed PRD &rarr; anchored plan &rarr; routed model),
+    across 8 feature requests in 2 business units. Baseline
+    quality averaged 19.5/25.</p>
+
+  <div class="kpis"><div class="kpi hero"><div class="kpi-label">Avg cost savings</div><div class="kpi-val good">58%</div></div><div class="kpi"><div class="kpi-label">Avg PRD compression</div><div class="kpi-val">73%</div></div><div class="kpi"><div class="kpi-label">Avg quality (optimised)</div><div class="kpi-val good">24.0 / 25</div></div><div class="kpi"><div class="kpi-label">Total input tokens saved</div><div class="kpi-val">2,413</div></div></div>
+
+  <div class="card">
+    <h2>Cost per feature request</h2>
+    <p class="note">USD per planning call at list price. Lower is better.</p>
+    <div class="legend"><span class="key"><span class="swatch" style="background:var(--series-1)"></span>Baseline (raw PRD → premium model)</span><span class="key"><span class="swatch" style="background:var(--series-2)"></span>Optimised (compressed → anchored → routed)</span></div>
+    <svg viewBox="0 0 780 320" class="chart" role="img" preserveAspectRatio="xMidYMid meet"><line x1="52" y1="246.00" x2="762" y2="246.00" class="grid" /><text x="44" y="249.50" text-anchor="end" class="tick">$0.000</text><line x1="52" y1="189.00" x2="762" y2="189.00" class="grid" /><text x="44" y="192.50" text-anchor="end" class="tick">$0.006</text><line x1="52" y1="132.00" x2="762" y2="132.00" class="grid" /><text x="44" y="135.50" text-anchor="end" class="tick">$0.013</text><line x1="52" y1="75.00" x2="762" y2="75.00" class="grid" /><text x="44" y="78.50" text-anchor="end" class="tick">$0.019</text><line x1="52" y1="18.00" x2="762" y2="18.00" class="grid" /><text x="44" y="21.50" text-anchor="end" class="tick">$0.025</text><path d="M71.38,246.00 L71.38,51.87 Q71.38,47.87 75.38,47.87 L91.38,47.87 Q95.38,47.87 95.38,51.87 L95.38,246.00 Z" fill="var(--series-1)" /><text x="83.38" y="43.87" text-anchor="middle" class="vlabel">$0.0221</text><path d="M97.38,246.00 L97.38,65.31 Q97.38,61.31 101.38,61.31 L117.38,61.31 Q121.38,61.31 121.38,65.31 L121.38,246.00 Z" fill="var(--series-2)" /><text x="109.38" y="57.31" text-anchor="middle" class="vlabel">$0.0206</text><text x="96.38" y="258.00" transform="rotate(-32 96.38 258.00)" text-anchor="end" class="xlabel">checkout-retry</text><path d="M160.12,246.00 L160.12,51.74 Q160.12,47.74 164.12,47.74 L180.12,47.74 Q184.12,47.74 184.12,51.74 L184.12,246.00 Z" fill="var(--series-1)" /><text x="172.12" y="43.74" text-anchor="middle" class="vlabel">$0.0221</text><path d="M186.12,246.00 L186.12,64.99 Q186.12,60.99 190.12,60.99 L206.12,60.99 Q210.12,60.99 210.12,64.99 L210.12,246.00 Z" fill="var(--series-2)" /><text x="198.12" y="56.99" text-anchor="middle" class="vlabel">$0.0207</text><text x="185.12" y="258.00" transform="rotate(-32 185.12 258.00)" text-anchor="end" class="xlabel">fraud-scoring</text><path d="M248.88,246.00 L248.88,52.37 Q248.88,48.37 252.88,48.37 L268.88,48.37 Q272.88,48.37 272.88,52.37 L272.88,246.00 Z" fill="var(--series-1)" /><text x="260.88" y="44.37" text-anchor="middle" class="vlabel">$0.0221</text><path d="M274.88,246.00 L274.88,213.19 Q274.88,209.19 278.88,209.19 L294.88,209.19 Q298.88,209.19 298.88,213.19 L298.88,246.00 Z" fill="var(--series-2)" /><text x="286.88" y="205.19" text-anchor="middle" class="vlabel">$0.0041</text><text x="273.88" y="258.00" transform="rotate(-32 273.88 258.00)" text-anchor="end" class="xlabel">wallet-topup</text><path d="M337.62,246.00 L337.62,52.95 Q337.62,48.95 341.62,48.95 L357.62,48.95 Q361.62,48.95 361.62,52.95 L361.62,246.00 Z" fill="var(--series-1)" /><text x="349.62" y="44.95" text-anchor="middle" class="vlabel">$0.0220</text><path d="M363.62,246.00 L363.62,213.31 Q363.62,209.31 367.62,209.31 L383.62,209.31 Q387.62,209.31 387.62,213.31 L387.62,246.00 Z" fill="var(--series-2)" /><text x="375.62" y="205.31" text-anchor="middle" class="vlabel">$0.0041</text><text x="362.62" y="258.00" transform="rotate(-32 362.62 258.00)" text-anchor="end" class="xlabel">scheduled-payout</text><path d="M426.38,246.00 L426.38,52.28 Q426.38,48.28 430.38,48.28 L446.38,48.28 Q450.38,48.28 450.38,52.28 L450.38,246.00 Z" fill="var(--series-1)" /><text x="438.38" y="44.28" text-anchor="middle" class="vlabel">$0.0221</text><path d="M452.38,246.00 L452.38,213.11 Q452.38,209.11 456.38,209.11 L472.38,209.11 Q476.38,209.11 476.38,213.11 L476.38,246.00 Z" fill="var(--series-2)" /><text x="464.38" y="205.11" text-anchor="middle" class="vlabel">$0.0041</text><text x="451.38" y="258.00" transform="rotate(-32 451.38 258.00)" text-anchor="end" class="xlabel">sso-login</text><path d="M515.12,246.00 L515.12,52.28 Q515.12,48.28 519.12,48.28 L535.12,48.28 Q539.12,48.28 539.12,52.28 L539.12,246.00 Z" fill="var(--series-1)" /><text x="527.12" y="44.28" text-anchor="middle" class="vlabel">$0.0221</text><path d="M541.12,246.00 L541.12,213.16 Q541.12,209.16 545.12,209.16 L561.12,209.16 Q565.12,209.16 565.12,213.16 L565.12,246.00 Z" fill="var(--series-2)" /><text x="553.12" y="205.16" text-anchor="middle" class="vlabel">$0.0041</text><text x="540.12" y="258.00" transform="rotate(-32 540.12 258.00)" text-anchor="end" class="xlabel">audit-log</text><path d="M603.88,246.00 L603.88,52.55 Q603.88,48.55 607.88,48.55 L623.88,48.55 Q627.88,48.55 627.88,52.55 L627.88,246.00 Z" fill="var(--series-1)" /><text x="615.88" y="44.55" text-anchor="middle" class="vlabel">$0.0221</text><path d="M629.88,246.00 L629.88,139.80 Q629.88,135.80 633.88,135.80 L649.88,135.80 Q653.88,135.80 653.88,139.80 L653.88,246.00 Z" fill="var(--series-2)" /><text x="641.88" y="131.80" text-anchor="middle" class="vlabel">$0.0123</text><text x="628.88" y="258.00" transform="rotate(-32 628.88 258.00)" text-anchor="end" class="xlabel">api-rate-limit</text><path d="M692.62,246.00 L692.62,52.41 Q692.62,48.41 696.62,48.41 L712.62,48.41 Q716.62,48.41 716.62,52.41 L716.62,246.00 Z" fill="var(--series-1)" /><text x="704.62" y="44.41" text-anchor="middle" class="vlabel">$0.0221</text><path d="M718.62,246.00 L718.62,213.20 Q718.62,209.20 722.62,209.20 L738.62,209.20 Q742.62,209.20 742.62,213.20 L742.62,246.00 Z" fill="var(--series-2)" /><text x="730.62" y="205.20" text-anchor="middle" class="vlabel">$0.0041</text><text x="717.62" y="258.00" transform="rotate(-32 717.62 258.00)" text-anchor="end" class="xlabel">feature-flags</text></svg>
+  </div>
+
+  <div class="card">
+    <h2>Plan quality (25-point rubric)</h2>
+    <p class="note">Correctness · completeness · anchoring · actionability ·
+      no-hallucination. Higher is better; optimised is equal or better in every case.</p>
+    <div class="legend"><span class="key"><span class="swatch" style="background:var(--series-1)"></span>Baseline (raw PRD → premium model)</span><span class="key"><span class="swatch" style="background:var(--series-2)"></span>Optimised (compressed → anchored → routed)</span></div>
+    <svg viewBox="0 0 780 320" class="chart" role="img" preserveAspectRatio="xMidYMid meet"><line x1="52" y1="246.00" x2="762" y2="246.00" class="grid" /><text x="44" y="249.50" text-anchor="end" class="tick">0</text><line x1="52" y1="200.40" x2="762" y2="200.40" class="grid" /><text x="44" y="203.90" text-anchor="end" class="tick">5</text><line x1="52" y1="154.80" x2="762" y2="154.80" class="grid" /><text x="44" y="158.30" text-anchor="end" class="tick">10</text><line x1="52" y1="109.20" x2="762" y2="109.20" class="grid" /><text x="44" y="112.70" text-anchor="end" class="tick">15</text><line x1="52" y1="63.60" x2="762" y2="63.60" class="grid" /><text x="44" y="67.10" text-anchor="end" class="tick">20</text><line x1="52" y1="18.00" x2="762" y2="18.00" class="grid" /><text x="44" y="21.50" text-anchor="end" class="tick">25</text><path d="M71.38,246.00 L71.38,76.72 Q71.38,72.72 75.38,72.72 L91.38,72.72 Q95.38,72.72 95.38,76.72 L95.38,246.00 Z" fill="var(--series-1)" /><text x="83.38" y="68.72" text-anchor="middle" class="vlabel">19</text><path d="M97.38,246.00 L97.38,40.24 Q97.38,36.24 101.38,36.24 L117.38,36.24 Q121.38,36.24 121.38,40.24 L121.38,246.00 Z" fill="var(--series-2)" /><text x="109.38" y="32.24" text-anchor="middle" class="vlabel">23</text><text x="96.38" y="258.00" transform="rotate(-32 96.38 258.00)" text-anchor="end" class="xlabel">checkout-retry</text><path d="M160.12,246.00 L160.12,76.72 Q160.12,72.72 164.12,72.72 L180.12,72.72 Q184.12,72.72 184.12,76.72 L184.12,246.00 Z" fill="var(--series-1)" /><text x="172.12" y="68.72" text-anchor="middle" class="vlabel">19</text><path d="M186.12,246.00 L186.12,40.24 Q186.12,36.24 190.12,36.24 L206.12,36.24 Q210.12,36.24 210.12,40.24 L210.12,246.00 Z" fill="var(--series-2)" /><text x="198.12" y="32.24" text-anchor="middle" class="vlabel">23</text><text x="185.12" y="258.00" transform="rotate(-32 185.12 258.00)" text-anchor="end" class="xlabel">fraud-scoring</text><path d="M248.88,246.00 L248.88,67.60 Q248.88,63.60 252.88,63.60 L268.88,63.60 Q272.88,63.60 272.88,67.60 L272.88,246.00 Z" fill="var(--series-1)" /><text x="260.88" y="59.60" text-anchor="middle" class="vlabel">20</text><path d="M274.88,246.00 L274.88,22.00 Q274.88,18.00 278.88,18.00 L294.88,18.00 Q298.88,18.00 298.88,22.00 L298.88,246.00 Z" fill="var(--series-2)" /><text x="286.88" y="14.00" text-anchor="middle" class="vlabel">25</text><text x="273.88" y="258.00" transform="rotate(-32 273.88 258.00)" text-anchor="end" class="xlabel">wallet-topup</text><path d="M337.62,246.00 L337.62,76.72 Q337.62,72.72 341.62,72.72 L357.62,72.72 Q361.62,72.72 361.62,76.72 L361.62,246.00 Z" fill="var(--series-1)" /><text x="349.62" y="68.72" text-anchor="middle" class="vlabel">19</text><path d="M363.62,246.00 L363.62,31.12 Q363.62,27.12 367.62,27.12 L383.62,27.12 Q387.62,27.12 387.62,31.12 L387.62,246.00 Z" fill="var(--series-2)" /><text x="375.62" y="23.12" text-anchor="middle" class="vlabel">24</text><text x="362.62" y="258.00" transform="rotate(-32 362.62 258.00)" text-anchor="end" class="xlabel">scheduled-payout</text><path d="M426.38,246.00 L426.38,76.72 Q426.38,72.72 430.38,72.72 L446.38,72.72 Q450.38,72.72 450.38,76.72 L450.38,246.00 Z" fill="var(--series-1)" /><text x="438.38" y="68.72" text-anchor="middle" class="vlabel">19</text><path d="M452.38,246.00 L452.38,40.24 Q452.38,36.24 456.38,36.24 L472.38,36.24 Q476.38,36.24 476.38,40.24 L476.38,246.00 Z" fill="var(--series-2)" /><text x="464.38" y="32.24" text-anchor="middle" class="vlabel">23</text><text x="451.38" y="258.00" transform="rotate(-32 451.38 258.00)" text-anchor="end" class="xlabel">sso-login</text><path d="M515.12,246.00 L515.12,67.60 Q515.12,63.60 519.12,63.60 L535.12,63.60 Q539.12,63.60 539.12,67.60 L539.12,246.00 Z" fill="var(--series-1)" /><text x="527.12" y="59.60" text-anchor="middle" class="vlabel">20</text><path d="M541.12,246.00 L541.12,22.00 Q541.12,18.00 545.12,18.00 L561.12,18.00 Q565.12,18.00 565.12,22.00 L565.12,246.00 Z" fill="var(--series-2)" /><text x="553.12" y="14.00" text-anchor="middle" class="vlabel">25</text><text x="540.12" y="258.00" transform="rotate(-32 540.12 258.00)" text-anchor="end" class="xlabel">audit-log</text><path d="M603.88,246.00 L603.88,67.60 Q603.88,63.60 607.88,63.60 L623.88,63.60 Q627.88,63.60 627.88,67.60 L627.88,246.00 Z" fill="var(--series-1)" /><text x="615.88" y="59.60" text-anchor="middle" class="vlabel">20</text><path d="M629.88,246.00 L629.88,22.00 Q629.88,18.00 633.88,18.00 L649.88,18.00 Q653.88,18.00 653.88,22.00 L653.88,246.00 Z" fill="var(--series-2)" /><text x="641.88" y="14.00" text-anchor="middle" class="vlabel">25</text><text x="628.88" y="258.00" transform="rotate(-32 628.88 258.00)" text-anchor="end" class="xlabel">api-rate-limit</text><path d="M692.62,246.00 L692.62,67.60 Q692.62,63.60 696.62,63.60 L712.62,63.60 Q716.62,63.60 716.62,67.60 L716.62,246.00 Z" fill="var(--series-1)" /><text x="704.62" y="59.60" text-anchor="middle" class="vlabel">20</text><path d="M718.62,246.00 L718.62,31.12 Q718.62,27.12 722.62,27.12 L738.62,27.12 Q742.62,27.12 742.62,31.12 L742.62,246.00 Z" fill="var(--series-2)" /><text x="730.62" y="23.12" text-anchor="middle" class="vlabel">24</text><text x="717.62" y="258.00" transform="rotate(-32 717.62 258.00)" text-anchor="end" class="xlabel">feature-flags</text></svg>
+  </div>
+
+  <div class="card">
+    <h2>Input tokens saved per feature request</h2>
+    <p class="note">Raw PRD tokens minus compressed PRD tokens.</p>
+    <svg viewBox="0 0 780 320" class="chart" role="img" preserveAspectRatio="xMidYMid meet"><line x1="52" y1="246.00" x2="762" y2="246.00" class="grid" /><text x="44" y="249.50" text-anchor="end" class="tick">0</text><line x1="52" y1="189.00" x2="762" y2="189.00" class="grid" /><text x="44" y="192.50" text-anchor="end" class="tick">88</text><line x1="52" y1="132.00" x2="762" y2="132.00" class="grid" /><text x="44" y="135.50" text-anchor="end" class="tick">175</text><line x1="52" y1="75.00" x2="762" y2="75.00" class="grid" /><text x="44" y="78.50" text-anchor="end" class="tick">262</text><line x1="52" y1="18.00" x2="762" y2="18.00" class="grid" /><text x="44" y="21.50" text-anchor="end" class="tick">350</text><path d="M84.38,246.00 L84.38,54.57 Q84.38,50.57 88.38,50.57 L104.38,50.57 Q108.38,50.57 108.38,54.57 L108.38,246.00 Z" fill="var(--series-1)" /><text x="96.38" y="46.57" text-anchor="middle" class="vlabel">300</text><text x="96.38" y="258.00" transform="rotate(-32 96.38 258.00)" text-anchor="end" class="xlabel">checkout-retry</text><path d="M173.12,246.00 L173.12,57.18 Q173.12,53.18 177.12,53.18 L193.12,53.18 Q197.12,53.18 197.12,57.18 L197.12,246.00 Z" fill="var(--series-1)" /><text x="185.12" y="49.18" text-anchor="middle" class="vlabel">296</text><text x="185.12" y="258.00" transform="rotate(-32 185.12 258.00)" text-anchor="end" class="xlabel">fraud-scoring</text><path d="M261.88,246.00 L261.88,52.62 Q261.88,48.62 265.88,48.62 L281.88,48.62 Q285.88,48.62 285.88,52.62 L285.88,246.00 Z" fill="var(--series-1)" /><text x="273.88" y="44.62" text-anchor="middle" class="vlabel">303</text><text x="273.88" y="258.00" transform="rotate(-32 273.88 258.00)" text-anchor="end" class="xlabel">wallet-topup</text><path d="M350.62,246.00 L350.62,51.97 Q350.62,47.97 354.62,47.97 L370.62,47.97 Q374.62,47.97 374.62,51.97 L374.62,246.00 Z" fill="var(--series-1)" /><text x="362.62" y="43.97" text-anchor="middle" class="vlabel">304</text><text x="362.62" y="258.00" transform="rotate(-32 362.62 258.00)" text-anchor="end" class="xlabel">scheduled-payout</text><path d="M439.38,246.00 L439.38,57.18 Q439.38,53.18 443.38,53.18 L459.38,53.18 Q463.38,53.18 463.38,57.18 L463.38,246.00 Z" fill="var(--series-1)" /><text x="451.38" y="49.18" text-anchor="middle" class="vlabel">296</text><text x="451.38" y="258.00" transform="rotate(-32 451.38 258.00)" text-anchor="end" class="xlabel">sso-login</text><path d="M528.12,246.00 L528.12,53.27 Q528.12,49.27 532.12,49.27 L548.12,49.27 Q552.12,49.27 552.12,53.27 L552.12,246.00 Z" fill="var(--series-1)" /><text x="540.12" y="45.27" text-anchor="middle" class="vlabel">302</text><text x="540.12" y="258.00" transform="rotate(-32 540.12 258.00)" text-anchor="end" class="xlabel">audit-log</text><path d="M616.88,246.00 L616.88,49.36 Q616.88,45.36 620.88,45.36 L636.88,45.36 Q640.88,45.36 640.88,49.36 L640.88,246.00 Z" fill="var(--series-1)" /><text x="628.88" y="41.36" text-anchor="middle" class="vlabel">308</text><text x="628.88" y="258.00" transform="rotate(-32 628.88 258.00)" text-anchor="end" class="xlabel">api-rate-limit</text><path d="M705.62,246.00 L705.62,51.97 Q705.62,47.97 709.62,47.97 L725.62,47.97 Q729.62,47.97 729.62,51.97 L729.62,246.00 Z" fill="var(--series-1)" /><text x="717.62" y="43.97" text-anchor="middle" class="vlabel">304</text><text x="717.62" y="258.00" transform="rotate(-32 717.62 258.00)" text-anchor="end" class="xlabel">feature-flags</text></svg>
+  </div>
+
+  <div class="card">
+    <h2>All results</h2>
+    <p class="note">Every value, available without relying on colour.</p>
+    <table class="data"><thead><tr><th>Case</th><th>BU</th><th>PRD compression</th><th>Baseline $</th><th>Optimised $</th><th>Cost saved</th><th>Quality (base→opt)</th></tr></thead><tbody><tr><td>checkout-retry</td><td>Payments</td><td>70.6%</td><td>$0.0221</td><td>$0.0206</td><td class='good'>-6.8%</td><td>19 &rarr; 23 / 25</td></tr><tr><td>fraud-scoring</td><td>Payments</td><td>69.2%</td><td>$0.0221</td><td>$0.0207</td><td class='good'>-6.7%</td><td>19 &rarr; 23 / 25</td></tr><tr><td>wallet-topup</td><td>Payments</td><td>73.2%</td><td>$0.0221</td><td>$0.0041</td><td class='good'>-81.4%</td><td>20 &rarr; 25 / 25</td></tr><tr><td>scheduled-payout</td><td>Payments</td><td>75.8%</td><td>$0.0220</td><td>$0.0041</td><td class='good'>-81.4%</td><td>19 &rarr; 24 / 25</td></tr><tr><td>sso-login</td><td>Platform</td><td>71.2%</td><td>$0.0221</td><td>$0.0041</td><td class='good'>-81.3%</td><td>19 &rarr; 23 / 25</td></tr><tr><td>audit-log</td><td>Platform</td><td>72.6%</td><td>$0.0221</td><td>$0.0041</td><td class='good'>-81.4%</td><td>20 &rarr; 25 / 25</td></tr><tr><td>api-rate-limit</td><td>Platform</td><td>75.1%</td><td>$0.0221</td><td>$0.0123</td><td class='good'>-44.2%</td><td>20 &rarr; 25 / 25</td></tr><tr><td>feature-flags</td><td>Platform</td><td>73.6%</td><td>$0.0221</td><td>$0.0041</td><td class='good'>-81.4%</td><td>20 &rarr; 24 / 25</td></tr></tbody></table>
+  </div>
+</div>
+<script>
+  (function () {
+    var btn = document.getElementById("themeToggle");
+    btn.addEventListener("click", function () {
+      var root = document.documentElement;
+      var cur = root.getAttribute("data-theme");
+      var next = cur === "dark" ? "light"
+        : cur === "light" ? "dark"
+        : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "light" : "dark");
+      root.setAttribute("data-theme", next);
+    });
+  })();
+</script>
+</body>
+</html>

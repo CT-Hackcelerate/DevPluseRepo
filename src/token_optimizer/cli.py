@@ -129,6 +129,92 @@ def _cmd_triage_github_prs(args: argparse.Namespace) -> int:
     )
 
 
+def _cmd_compress_prd(args: argparse.Namespace) -> int:
+    """Skill 1 — compress a verbose PRD into dense requirement atoms."""
+    from .integrations.document import read_document
+    from .prd.compressor import compress_prd
+
+    text = read_document(args.file)
+    result = compress_prd(text)
+
+    out_path = args.out or os.path.join(os.getcwd(), "compressed_prd.txt")
+    with open(out_path, "w", encoding="utf-8") as fh:
+        fh.write(result.compressed_text)
+
+    print(result.compressed_text)
+    print("\n" + result.summary(), file=sys.stderr)
+    print(f"Compressed PRD written to: {out_path}", file=sys.stderr)
+    return 0
+
+
+def _cmd_anchor_plan(args: argparse.Namespace) -> int:
+    """Skill 2a — anchor plan steps to real file:line references in a repo."""
+    from .anchor.anchor import anchor_plan, anchoring_accuracy
+    from .anchor.indexer import build_index
+
+    with open(args.plan, "r", encoding="utf-8") as fh:
+        steps = [ln.strip() for ln in fh if ln.strip()]
+
+    index = build_index(args.repo)
+    anchors = anchor_plan(steps, index)
+
+    for anc in anchors:
+        print(anc.render())
+
+    accuracy = anchoring_accuracy(anchors)
+    unresolved = sum(1 for a in anchors if a.unresolved_terms)
+    print(
+        f"\nIndexed {len(index)} symbols in {args.repo} | "
+        f"{len(steps)} steps | anchoring accuracy {accuracy * 100:.0f}% | "
+        f"{unresolved} step(s) with unresolved (possible hallucination) references",
+        file=sys.stderr,
+    )
+    return 0
+
+
+def _cmd_route(args: argparse.Namespace) -> int:
+    """Skill 2b — classify a task's complexity and route it to a model."""
+    from .router.router import RouterConfig, route_task
+
+    route = route_task(args.task, RouterConfig())
+    print(route.render())
+    cls = route.classification
+    if cls is not None:
+        print(
+            f"\nsignals: {cls.signals} | confidence {route.confidence:.2f}"
+            + ("  (upgraded to premium: low confidence)" if route.upgraded else ""),
+            file=sys.stderr,
+        )
+    return 0
+
+
+def _cmd_ab_suite(args: argparse.Namespace) -> int:
+    """Eval — run the 8-case, 2-BU A/B suite (baseline vs optimised)."""
+    from .anchor.indexer import build_index
+    from .eval.ab_runner import run_ab_suite
+    from .eval.datasets import sample_cases
+
+    index = build_index(args.repo)
+    summary = run_ab_suite(sample_cases(), index)
+
+    print(summary.summary())
+    print("\nper-case:")
+    for r in summary.results:
+        print("  " + r.summary())
+    return 0
+
+
+def _cmd_dashboard(args: argparse.Namespace) -> int:
+    """Eval — render the A/B results to a self-contained HTML dashboard."""
+    from .eval.dashboard import write_dashboard
+
+    out_path = args.out or os.path.join(os.getcwd(), "ab_dashboard.html")
+    write_dashboard(out_path, repo=args.repo)
+    print(f"Dashboard written to: {out_path}", file=sys.stderr)
+    print(out_path)
+    return 0
+
+
 def _cmd_demo(args: argparse.Namespace) -> int:
     """Run the full optimization pipeline on synthetic JIRA-shaped data."""
     from .optimize.pipeline import OptimizedRunner
@@ -225,6 +311,68 @@ def main(argv: list[str] | None = None) -> int:
         help="Pull and compress each diff for a deeper read (more tokens)",
     )
     p.set_defaults(func=_cmd_triage_github_prs)
+
+    p = sub.add_parser(
+        "compress-prd",
+        help="Skill 1: compress a verbose PRD into dense requirement atoms",
+    )
+    p.add_argument("--file", required=True, help="Path to a .docx/.txt/.md PRD")
+    p.add_argument(
+        "--out",
+        default=None,
+        help="Output file (default: compressed_prd.txt in the current folder)",
+    )
+    p.set_defaults(func=_cmd_compress_prd)
+
+    p = sub.add_parser(
+        "anchor-plan",
+        help="Skill 2a: anchor plan steps to real file:line references",
+    )
+    p.add_argument(
+        "--plan",
+        required=True,
+        help="Text file with one plan step per line",
+    )
+    p.add_argument(
+        "--repo",
+        default=os.getcwd(),
+        help="Repository root to index (default: current directory)",
+    )
+    p.set_defaults(func=_cmd_anchor_plan)
+
+    p = sub.add_parser(
+        "route",
+        help="Skill 2b: classify a task's complexity and route it to a model",
+    )
+    p.add_argument("--task", required=True, help="Task description to route")
+    p.set_defaults(func=_cmd_route)
+
+    p = sub.add_parser(
+        "ab-suite",
+        help="Eval: run the 8-case, 2-BU A/B suite (baseline vs optimised)",
+    )
+    p.add_argument(
+        "--repo",
+        default="src",
+        help="Repository root to index for anchoring (default: src)",
+    )
+    p.set_defaults(func=_cmd_ab_suite)
+
+    p = sub.add_parser(
+        "dashboard",
+        help="Eval: render the A/B results to a self-contained HTML dashboard",
+    )
+    p.add_argument(
+        "--repo",
+        default="src",
+        help="Repository root to index for anchoring (default: src)",
+    )
+    p.add_argument(
+        "--out",
+        default=None,
+        help="Output HTML file (default: ab_dashboard.html in the current folder)",
+    )
+    p.set_defaults(func=_cmd_dashboard)
 
     p = sub.add_parser("demo", help="Run the optimizer on canned data")
     p.set_defaults(func=_cmd_demo)
