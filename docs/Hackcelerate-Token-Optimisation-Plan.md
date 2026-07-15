@@ -1,5 +1,5 @@
 # Token Optimisation in AI-Assisted Development
-### Hackathon Use Case & Development Plan
+### Hackcelerate Use Case & Development Plan
 
 ---
 
@@ -155,7 +155,7 @@ To prove the **35% cost savings at equal-or-higher quality** claim:
 
 ---
 
-## 7. Demonstration Plan (Hackathon Demo)
+## 7. Demonstration Plan (Hackcelerate Demo)
 
 The demo will tell a clear before/after story in ~5 minutes:
 

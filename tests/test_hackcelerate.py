@@ -1,4 +1,4 @@
-"""Offline tests for the Hackathon token-optimisation skills (no API needed)."""
+"""Offline tests for the token-optimisation skills (no API needed)."""
 
 import sys
 from pathlib import Path

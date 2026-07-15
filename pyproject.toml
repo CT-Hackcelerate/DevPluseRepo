@@ -13,8 +13,8 @@ dependencies = [
 [project.optional-dependencies]
 # Real BPE token counting offline. Falls back to a heuristic if not installed.
 tokenize = ["tiktoken>=0.7.0"]
-# Generate the project documentation PDF (scripts/generate_docs_pdf.py).
-docs = ["reportlab>=4.0"]
+# Generate the documentation PDFs and the pitch deck (scripts/generate_*).
+docs = ["reportlab>=4.0", "python-pptx>=1.0"]
 
 [project.scripts]
 tokenopt = "token_optimizer.cli:main"

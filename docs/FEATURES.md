@@ -177,7 +177,7 @@ cost/quality claims with a deterministic, offline harness.
 cost savings, **24.0/25** average optimised quality (baseline 19.5) across the
 8 cases / 2 BUs. See `test_prd_compression_meets_67_percent_claim` and
 `test_ab_suite_meets_savings_and_quality_targets` in
-[`tests/test_hackathon.py`](../tests/test_hackathon.py).
+[`tests/test_hackcelerate.py`](../tests/test_hackcelerate.py).
 
 ---
 
@@ -294,7 +294,7 @@ src/token_optimizer/
   ui/                    desktop Tkinter app (app.py, `python -m token_optimizer.ui`)
 docs/                    FEATURES.md, plan, generated documentation PDF
 examples/                sample PRD / document inputs
-tests/                   offline test suites (test_optimize, test_hackathon)
+tests/                   offline test suites (test_optimize, test_hackcelerate)
 ```
 
 ---

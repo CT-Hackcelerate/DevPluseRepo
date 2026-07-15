@@ -388,7 +388,7 @@ def build_story(S: dict, meta: dict) -> list:
         "  ui/                    app.py (three-tab Tkinter app), __main__.py\n"
         "docs/                    FEATURES.md . CHANGELOG.md . this ADD . plan . PDFs\n"
         "examples/                sample PRD / document inputs\n"
-        "tests/                   test_optimize.py . test_hackathon.py"
+        "tests/                   test_optimize.py . test_hackcelerate.py"
     )
 
     # ── 15. Risks & future work ────────────────────────────────────────
