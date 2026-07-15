@@ -18,8 +18,12 @@ saved. A small desktop **UI** lets you pick a document and view the result.
 > (regenerate with `python scripts/generate_architecture_pdf.py`).
 >
 > 📊 **Pitch:** [Hackcelerate deck (PPTX)](docs/TokenOptimizer-Hackcelerate.pptx)
-> — 12 slides with a live A/B chart (regenerate with
+> — 13 slides with a live A/B chart (regenerate with
 > `python scripts/generate_hackcelerate_ppt.py`).
+>
+> 🎬 **Demo video:** [TokenOptimizer-Demo.mp4](docs/TokenOptimizer-Demo.mp4)
+> — a 3:14 narrated walkthrough of every feature (regenerate with
+> `python scripts/generate_demo_video.py`).
 
 ## Document optimizer (default use case)
 
@@ -140,13 +144,12 @@ tokenopt ab-suite --repo src
 tokenopt dashboard --repo src        # writes/opens ab_dashboard.html
 ```
 
-- **Skill 1 — PRD compression** ([`skills/prd/compressor.py`](src/token_optimizer/skills/prd/compressor.py)): extracts decision-relevant requirement atoms, keeps acceptance criteria verbatim.
-- **Skill 2a — Codebase anchoring** ([`skills/anchor/`](src/token_optimizer/skills/anchor/)): AST/regex symbol index → `file:line` anchors, flags unresolved (hallucinated) references.
-- **Skill 2b — Model routing** ([`skills/router/`](src/token_optimizer/skills/router/)): complexity classifier + confidence-threshold fallback to premium.
+- **Skill 1 — PRD compression** ([`skills/prd_compression/`](skills/prd_compression/)): extracts decision-relevant requirement atoms, keeps acceptance criteria verbatim.
+- **Skill 2a — Codebase anchoring** ([`skills/codebase_anchoring/`](skills/codebase_anchoring/)): AST/regex symbol index → `file:line` anchors, flags unresolved (hallucinated) references.
+- **Skill 2b — Model routing** ([`skills/model_routing/`](skills/model_routing/)): complexity classifier + confidence-threshold fallback to premium.
 - **Validation** ([`evaluation/`](src/token_optimizer/evaluation/)): **~73% compression, ~58% cost savings, 24.0/25 quality** across 8 cases / 2 BUs — locked by tests.
 
-The skills are also packaged as invokable Claude Code skills under
-[`.claude/skills/`](.claude/skills/).
+Each skill is a **self-contained package** under [`skills/`](skills/) — code, `SKILL.md`, and tests together, importable as `prd_compression` / `codebase_anchoring` / `model_routing`.
 
 ## Library usage
 
@@ -166,20 +169,23 @@ print(result.summary())   # raw vs optimized tokens, cache hits, cost
 
 ## Layout
 
-Layered `src/` package — cross-cutting infrastructure in `core/`, the product
-skills in `skills/`, everything else grouped by responsibility.
+Two source roots: the **core package** under `src/`, and the
+**independently-maintained skill plugins** under `skills/` (each self-contained).
 
 ```
-src/token_optimizer/
+src/token_optimizer/     core package
   cli.py                 `tokenopt` command (all subcommands)
   core/                  config, per-run logging, Claude client + cache
-  skills/                prd/ (Skill 1), anchor/ (Skill 2a), router/ (Skill 2b)
   optimize/              the strategies + pipelines that compose them
   integrations/          JIRA, GitHub, Azure DevOps, GitLab, Jenkins, documents
   automations/           ready-made flows (JIRA triage, Jenkins RCA, PR review)
   evaluation/            A/B runner, 25-pt rubric, cost model, dataset, dashboard
   ui/                    desktop Tkinter app (app.py)
-docs/                    FEATURES.md, plan, documentation PDF
+skills/                  self-contained skill plugins (code + SKILL.md + tests)
+  prd_compression/       Skill 1 — PRD compression
+  codebase_anchoring/    Skill 2a — codebase file:line anchoring
+  model_routing/         Skill 2b — complexity-based model routing
+docs/                    FEATURES.md, CHANGELOG.md, plan, PDFs / deck / video
 examples/                sample PRD / document inputs
 tests/                   offline test suites (deterministic, no API key)
 ```

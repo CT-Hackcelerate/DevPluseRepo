@@ -132,7 +132,7 @@ def _cmd_triage_github_prs(args: argparse.Namespace) -> int:
 def _cmd_compress_prd(args: argparse.Namespace) -> int:
     """Skill 1 — compress a verbose PRD into dense requirement atoms."""
     from .integrations.document import read_document
-    from .skills.prd.compressor import compress_prd
+    from prd_compression.compressor import compress_prd
 
     text = read_document(args.file)
     result = compress_prd(text)
@@ -149,8 +149,8 @@ def _cmd_compress_prd(args: argparse.Namespace) -> int:
 
 def _cmd_anchor_plan(args: argparse.Namespace) -> int:
     """Skill 2a — anchor plan steps to real file:line references in a repo."""
-    from .skills.anchor.anchor import anchor_plan, anchoring_accuracy
-    from .skills.anchor.indexer import build_index
+    from codebase_anchoring.anchor import anchor_plan, anchoring_accuracy
+    from codebase_anchoring.indexer import build_index
 
     with open(args.plan, "r", encoding="utf-8") as fh:
         steps = [ln.strip() for ln in fh if ln.strip()]
@@ -174,7 +174,7 @@ def _cmd_anchor_plan(args: argparse.Namespace) -> int:
 
 def _cmd_route(args: argparse.Namespace) -> int:
     """Skill 2b — classify a task's complexity and route it to a model."""
-    from .skills.router.router import RouterConfig, route_task
+    from model_routing.router import RouterConfig, route_task
 
     route = route_task(args.task, RouterConfig())
     print(route.render())
@@ -190,7 +190,7 @@ def _cmd_route(args: argparse.Namespace) -> int:
 
 def _cmd_ab_suite(args: argparse.Namespace) -> int:
     """Eval — run the 8-case, 2-BU A/B suite (baseline vs optimised)."""
-    from .skills.anchor.indexer import build_index
+    from codebase_anchoring.indexer import build_index
     from .evaluation.ab_runner import run_ab_suite
     from .evaluation.datasets import sample_cases
 

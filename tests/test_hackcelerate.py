@@ -4,12 +4,13 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills"))
 
-from token_optimizer.skills.prd.compressor import compress_prd, render_atoms  # noqa: E402
-from token_optimizer.skills.anchor.indexer import build_index, CodebaseIndex  # noqa: E402
-from token_optimizer.skills.anchor.anchor import anchor_plan, anchoring_accuracy  # noqa: E402
-from token_optimizer.skills.router.classifier import Complexity, classify_task  # noqa: E402
-from token_optimizer.skills.router.router import RouterConfig, route_task  # noqa: E402
+from prd_compression.compressor import compress_prd, render_atoms  # noqa: E402
+from codebase_anchoring.indexer import build_index, CodebaseIndex  # noqa: E402
+from codebase_anchoring.anchor import anchor_plan, anchoring_accuracy  # noqa: E402
+from model_routing.classifier import Complexity, classify_task  # noqa: E402
+from model_routing.router import RouterConfig, route_task  # noqa: E402
 from token_optimizer.evaluation.cost import estimate_cost  # noqa: E402
 from token_optimizer.evaluation.quality_rubric import score_quality  # noqa: E402
 from token_optimizer.evaluation.ab_runner import TestCase, run_ab_suite  # noqa: E402
@@ -70,7 +71,7 @@ def test_render_atoms_groups_by_category():
 # ── Skill 2a — codebase anchoring ────────────────────────────────────────────
 
 def test_build_index_finds_python_symbols():
-    root = str(Path(__file__).resolve().parents[1] / "src")
+    root = str(Path(__file__).resolve().parents[1])
     index = build_index(root)
     assert len(index) > 0
     # A known function from this repo should be indexed.
@@ -81,7 +82,7 @@ def test_build_index_finds_python_symbols():
 
 
 def test_anchor_plan_resolves_real_symbols():
-    root = str(Path(__file__).resolve().parents[1] / "src")
+    root = str(Path(__file__).resolve().parents[1])
     index = build_index(root)
     steps = [
         "Call compress_prd on the raw PRD text",
@@ -149,7 +150,7 @@ def test_estimate_cost_scales_and_ranks_models():
 
 
 def test_score_quality_perfect_when_anchored_and_complete():
-    root = str(Path(__file__).resolve().parents[1] / "src")
+    root = str(Path(__file__).resolve().parents[1])
     index = build_index(root)
     requirements = ["compress the PRD", "build the index"]
     steps = [
@@ -163,7 +164,7 @@ def test_score_quality_perfect_when_anchored_and_complete():
 
 
 def test_ab_suite_shows_savings_and_maintains_quality():
-    root = str(Path(__file__).resolve().parents[1] / "src")
+    root = str(Path(__file__).resolve().parents[1])
     index = build_index(root)
     summary = run_ab_suite(sample_cases(), index)
     assert summary.num_tests >= 8
@@ -192,7 +193,7 @@ def test_prd_compression_meets_67_percent_claim():
 
 def test_ab_suite_meets_savings_and_quality_targets():
     """Validated outcome: up to 35% savings at quality >= 23/25 over 2 BUs."""
-    root = str(Path(__file__).resolve().parents[1] / "src")
+    root = str(Path(__file__).resolve().parents[1])
     index = build_index(root)
     summary = run_ab_suite(sample_cases(), index)
     assert summary.num_tests >= 8
@@ -203,7 +204,7 @@ def test_ab_suite_meets_savings_and_quality_targets():
 
 
 def test_dashboard_builds_valid_html_with_real_numbers():
-    root = str(Path(__file__).resolve().parents[1] / "src")
+    root = str(Path(__file__).resolve().parents[1])
     html = build_dashboard(root)
     assert html.startswith("<!DOCTYPE html>")
     # Three inline-SVG charts + a data table, no external assets.

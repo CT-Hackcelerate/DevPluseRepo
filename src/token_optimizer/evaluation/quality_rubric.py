@@ -18,7 +18,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from ..skills.anchor.anchor import Anchor, anchoring_accuracy
+from codebase_anchoring.anchor import Anchor, anchoring_accuracy
 
 _VAGUE = re.compile(
     r"\b(somehow|maybe|probably|etc\.?|and so on|as needed|appropriately|"

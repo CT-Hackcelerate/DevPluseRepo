@@ -31,3 +31,6 @@ optimized_output.txt
 # Per-run logs
 logs/
 
+
+# Stray tool jars (e.g. plantuml)
+*.jar
