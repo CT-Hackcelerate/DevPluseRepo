@@ -1,0 +1,60 @@
+@startuml 05-skills
+' Feature-development skill plugins (skills/*): PRD compression, codebase
+' anchoring, and complexity-based model routing.
+title Flow — Feature-Development Skills
+
+skinparam shadowing false
+skinparam activity {
+  BackgroundColor #FDFDFD
+  BorderColor #35506E
+  DiamondBackgroundColor #FFF4D6
+  DiamondBorderColor #B8860B
+  ArrowColor #35506E
+}
+
+|#EAF3EA|Skill 1 — PRD compression (prd_compression)|
+start
+:read PRD (.docx/.txt/.md);
+:normalize_unicode + strip_boilerplate\n+ collapse_punctuation + substitute_fillers\n(reused from optimize.local);
+:segment into sections / lines;
+:classify each unit by category cue (priority order):\nacceptance-criteria -> constraint -> non-functional\n-> out-of-scope -> dependency -> goal -> other;
+if (category == acceptance-criteria?) then (yes)
+  :keep VERBATIM (never paraphrase);
+else (no)
+  :re-render as terse atom;
+endif
+:drop low-signal "other" prose + dedupe near-identical atoms;
+:CompressionResult\natoms grouped by category · raw vs compressed tokens\n(~1/3 of original);
+stop
+
+|#F4F7FB|Skill 2a — codebase anchoring (codebase_anchoring)|
+start
+:build_index(repo)\nAST + regex symbol index (functions/classes -> file:line);
+:for each plan step: extract candidate symbol terms;
+if (term resolves in index?) then (yes)
+  :attach file:line anchor;
+else (no)
+  :record unresolved term\n(flag possible hallucination);
+endif
+:anchoring_accuracy = anchored / total;
+:Anchors + accuracy% + unresolved count;
+stop
+
+|#FDF3E7|Skill 2b — model routing (model_routing)|
+start
+:classify_task(task)\ncount cues: trivial / standard / complex\n+ heuristics (length, multi-step);
+:pick winner tier (complex dominates)\nconfidence = winner share, damped on ties;
+if (confidence < threshold  AND  tier != complex?) then (yes)
+  :escalate one tier toward premium\nupgraded = True (safety first);
+else (no)
+  :keep tier;
+endif
+partition "model_for(tier)" {
+  :trivial  -> claude-haiku-4-5;
+  :standard -> claude-sonnet-5;
+  :complex  -> claude-opus-4-8;
+}
+:ModelRoute\ntask · tier · confidence · model · upgraded;
+stop
+
+@enduml

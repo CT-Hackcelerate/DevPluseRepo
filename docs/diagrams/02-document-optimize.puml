@@ -1,0 +1,71 @@
+@startuml 02-document-optimize
+' Document / free-form text optimization pipeline (optimize/text_pipeline.py,
+' optimize/local.py, optimize/compress.py, optimize/tokens.py).
+title Flow — Document Optimization  (TextOptimizer.optimize)
+
+skinparam shadowing false
+skinparam ConditionEndStyle hline
+skinparam activity {
+  BackgroundColor #FDFDFD
+  BorderColor #35506E
+  DiamondBackgroundColor #FFF4D6
+  DiamondBorderColor #B8860B
+  ArrowColor #35506E
+}
+
+|#F4F7FB|Input|
+start
+:read_document(path)\n.docx (python-docx) / .txt / .md;
+:TextOptimizer.__post_init__\nbuild ClaudeClient only if API key present;
+
+|Count (baseline)|
+if (API key set?) then (yes)
+  :RAW tokens via API count_tokens\ntoken_method = api;
+else (no)
+  if (tiktoken installed?) then (yes)
+    :RAW tokens via tiktoken cl100k\ntoken_method = tiktoken;
+  else (no)
+    :RAW tokens via char/word estimate\ntoken_method = estimate;
+  endif
+endif
+
+|#EAF3EA|Strategy 1 — deterministic reductions (offline, always)|
+:normalize_unicode()\nfancy Unicode -> ASCII, drop emoji;
+:strip_boilerplate()\npage numbers, headers/footers, rules, TOC;
+:collapse_punctuation()\ndecorative/repeated punctuation, bullets;
+:substitute_fillers()\nverbose phrases -> short equivalents;
+:dedupe_paragraphs()\nnear-duplicate paragraph removal;
+note right: reduce_text() records only\nthe stages that changed something
+
+|#EAF3EA|Strategy 2 — compression (before summary)|
+:compress_prose()\ncollapse whitespace runs, squeeze blank lines,\ndedupe verbatim lines, head/tail truncate (max_chars);
+note right: runs BEFORE summary so duplicate\nlines can't dominate the summary
+
+|#FDF3E7|Strategy 3 — summary (optional: --summarize)|
+if (summarize requested?) then (yes)
+  if (ClaudeClient / API key?) then (yes)
+    :Claude Haiku summary\nlow effort, adaptive_thinking off;
+    #D6E8FF:summary_tier = haiku;
+  elseif (local Ollama model configured?) then (yes)
+    :local-model abstractive summary\n(no cloud tokens);
+    #D6E8FF:summary_tier = local-model;
+  else (no key / no model)
+    :extractive_summary()\nTextRank-style, entity-anchored\n(keeps error codes, versions, IDs, paths);
+    #D6E8FF:summary_tier = extractive;
+  endif
+else (no)
+  :summary_tier = none;
+endif
+
+|Finalize|
+:final compress_prose()\ntidy whitespace + enforce char cap;
+:count OPTIMIZED tokens (same method);
+:estimate_cost() (0.0 if offline);
+:TextOptimizationResult\nraw vs optimized · tokens_saved · reduction_pct\nstages · summary_tier · token_method · duration_ms;
+
+|Output|
+:write_output() -> optimized_output.txt\n(stats header + optimized text);
+:log_run() -> logs/<run_id>_optimize-doc.log;
+stop
+
+@enduml

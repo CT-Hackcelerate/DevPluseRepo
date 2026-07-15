@@ -1,0 +1,51 @@
+@startuml 06-ab-validation
+' Offline A/B validation harness (evaluation/ab_runner.py, cost.py,
+' quality_rubric.py, datasets.py, dashboard.py).
+title Flow — A/B Validation  (baseline vs optimised, 25-pt rubric)
+
+skinparam shadowing false
+skinparam activity {
+  BackgroundColor #FDFDFD
+  BorderColor #35506E
+  DiamondBackgroundColor #FFF4D6
+  DiamondBorderColor #B8860B
+  ArrowColor #35506E
+}
+
+|#F4F7FB|Setup|
+start
+:sample_cases()\n8 feature requests across 2 BUs;
+:build_index(repo) once\n(shared codebase symbol index);
+
+|#EAF3EA|Per test case — run_ab_case()|
+:compress_prd(case.prd)\n-> requirement atoms (raw & compressed tokens);
+:plan_fn(requirements, task) -> plan steps\n(offline stub by default; LLM-pluggable hook);
+
+split
+  |#FDECEC|Arm A — Baseline|
+  :input_tokens = RAW prd tokens;
+  :model = claude-opus-4-8 (premium, fixed);
+  :anchor_plan(steps, index = None)\nNO anchoring available;
+  :score_quality()\nloses anchoring + no-hallucination points;
+  :estimate_cost(model, in, out);
+split again
+  |#E9F2FF|Arm B — Optimised|
+  :input_tokens = COMPRESSED prd tokens;
+  :route_task(task) -> cheapest capable model;
+  :anchor_plan(steps, index)\nsteps anchored to real file:line;
+  :score_quality()\ngains anchoring + no-hallucination points;
+  :estimate_cost(model, in, out);
+end split
+
+:ABResult\ncost_savings_pct · token_reduction_pct\nquality_delta (out of 25);
+
+|#F4F7FB|Aggregate & report|
+:ABSummary over all cases\navg cost savings ~58% · avg input reduction ~73%\navg quality 24.0/25 (locked by tests);
+if (command == dashboard?) then (yes)
+  :write_dashboard() -> ab_dashboard.html\n(self-contained cost/quality charts);
+else (ab-suite)
+  :print suite summary + per-case lines;
+endif
+stop
+
+@enduml

@@ -1,0 +1,59 @@
+@startuml 07-end-to-end-dataflow
+' The single spine every command shares: acquire -> optimize -> measure ->
+' (cache/call) -> report. Swimlanes show which layer owns each step.
+title Flow — End-to-End Data Flow (the shared spine)
+
+skinparam shadowing false
+skinparam ArrowColor #35506E
+skinparam activity {
+  BackgroundColor #FDFDFD
+  BorderColor #35506E
+  DiamondBackgroundColor #FFF4D6
+  DiamondBorderColor #B8860B
+}
+
+|#F4F7FB|Interface|
+start
+:user picks a command\n(UI tab / tokenopt CLI / library call);
+:Config() from env/.env\n(build_config merges UI form overrides);
+
+|#EDEDED|Acquire|
+if (source type?) then (document)
+  :read_document() -> text;
+elseif (JIRA) then
+  :JiraConnector.search(jql) -> issues;
+elseif (GitHub) then
+  :GitHubConnector get_pr/list_open_prs (+diff);
+else (Jenkins)
+  :JenkinsConnector get_build + console_log;
+endif
+
+|#EAF3EA|Optimize|
+:count RAW tokens (baseline);
+:prefilter_fields (structured) / reduce_text (prose);
+:compress_text / compress_prose / compress_diff;
+if (--summarize?) then (yes)
+  :summarize  Haiku -> local Ollama -> extractive;
+else (no)
+endif
+:build minimal request\n(stable system prefix + terse task + <data>);
+:count OPTIMIZED tokens;
+
+|#E9F2FF|Measure & Call|
+:ClaudeClient.complete();
+if (identical request in ResponseCache?) then (hit)
+  :return cached text\n0 tokens · local_cache_hit++;
+else (miss)
+  :call Anthropic API\nnative prompt cache on system prefix\n(~0.1x reads) · adaptive thinking + effort;
+  :tally Usage · store response in cache;
+endif
+:estimate_cost() from Usage x _PRICING;
+
+|#FDF3E7|Report|
+:Result — raw vs optimized tokens,\n%saved, cache hits, est. cost, stages;
+:write optimized_output.txt (doc runs);
+:log_run() -> logs/<run_id>_<cmd>.log\n(metrics + config, secrets redacted);
+:optional: post PR comment · render ab_dashboard.html;
+stop
+
+@enduml
