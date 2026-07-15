@@ -33,7 +33,7 @@ from reportlab.platypus import (
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUT = PROJECT_ROOT / "documents" / "TokenOptimizer_Documentation.pdf"
+DEFAULT_OUT = PROJECT_ROOT / "docs" / "TokenOptimizer_Documentation.pdf"
 
 INK = colors.HexColor("#1a2233")
 ACCENT = colors.HexColor("#0a5cff")

@@ -19,8 +19,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..anchor.indexer import build_index
-from ..prd.compressor import compress_prd
+from ..skills.anchor.indexer import build_index
+from ..skills.prd.compressor import compress_prd
 from .ab_runner import ABSummary, run_ab_suite
 from .datasets import sample_cases
 

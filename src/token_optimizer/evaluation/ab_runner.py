@@ -21,10 +21,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from ..anchor.anchor import anchor_plan
-from ..anchor.indexer import CodebaseIndex
-from ..prd.compressor import compress_prd
-from ..router.router import RouterConfig, route_task
+from ..skills.anchor.anchor import anchor_plan
+from ..skills.anchor.indexer import CodebaseIndex
+from ..skills.prd.compressor import compress_prd
+from ..skills.router.router import RouterConfig, route_task
 from .cost import estimate_cost
 from .quality_rubric import QualityScore, score_quality
 

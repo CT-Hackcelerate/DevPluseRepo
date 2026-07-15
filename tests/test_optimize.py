@@ -36,8 +36,8 @@ from token_optimizer.optimize.text_pipeline import (  # noqa: E402
     build_prompt_request,
 )
 from token_optimizer.integrations.document import read_document  # noqa: E402
-from token_optimizer.config import Config  # noqa: E402
-from token_optimizer.llm.cache import ResponseCache  # noqa: E402
+from token_optimizer.core.config import Config  # noqa: E402
+from token_optimizer.core.llm.cache import ResponseCache  # noqa: E402
 
 
 def test_prefilter_keeps_only_allowlisted_fields():
@@ -386,7 +386,7 @@ def test_render_github_pr_to_text():
 
 
 def test_run_log_writes_file_with_details(tmp_path):
-    from token_optimizer.run_log import build_record, write_run_log
+    from token_optimizer.core.run_log import build_record, write_run_log
 
     cfg = Config(anthropic_api_key="")
     text = "Repeated line\n" * 20 + "Unique payload."
@@ -411,7 +411,7 @@ def test_run_log_writes_file_with_details(tmp_path):
 
 
 def test_run_log_never_logs_secrets(tmp_path):
-    from token_optimizer.run_log import build_record, write_run_log
+    from token_optimizer.core.run_log import build_record, write_run_log
 
     secret = "sk-ant-SECRET-VALUE-123"
     cfg = Config(anthropic_api_key=secret, jira_api_token="jira-secret", github_token="gh-secret")
@@ -431,7 +431,7 @@ def test_run_log_never_logs_secrets(tmp_path):
 
 
 def test_run_log_records_error(tmp_path):
-    from token_optimizer.run_log import build_record
+    from token_optimizer.core.run_log import build_record
 
     record = build_record(
         command="optimize-doc",

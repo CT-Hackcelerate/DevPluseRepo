@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..config import Config
+from ..core.config import Config
 from ..integrations.github import GitHubConnector
 from ..optimize.compress import compress_diff
 from ..optimize.pipeline import OptimizationResult, OptimizedRunner

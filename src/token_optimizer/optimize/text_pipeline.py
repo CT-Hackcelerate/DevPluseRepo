@@ -15,9 +15,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
-from ..config import Config
-from ..llm.cache import ResponseCache
-from ..llm.client import ClaudeClient
+from ..core.config import Config
+from ..core.llm.cache import ResponseCache
+from ..core.llm.client import ClaudeClient
 from .compress import compress_prose
 from .local import extractive_summary, reduce_text
 from .local_model import get_local_summarizer

@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 from typing import Any
 
-from ..config import Config
+from ..core.config import Config
 from .base import Connector
 
 _API = "api-version=7.1"

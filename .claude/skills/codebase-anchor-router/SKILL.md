@@ -23,8 +23,8 @@ symbol table with exact line numbers, then resolves each plan step's symbol
 mentions to a real `path:line` anchor. Steps whose symbol-like terms resolve to
 nothing are **flagged as possible hallucinations** rather than silently accepted.
 
-Implementation: [`anchor/indexer.py`](../../../src/token_optimizer/anchor/indexer.py),
-[`anchor/anchor.py`](../../../src/token_optimizer/anchor/anchor.py).
+Implementation: [`skills/anchor/indexer.py`](../../../src/token_optimizer/skills/anchor/indexer.py),
+[`skills/anchor/anchor.py`](../../../src/token_optimizer/skills/anchor/anchor.py).
 
 ```bash
 # plan.txt: one plan step per line
@@ -44,8 +44,8 @@ Below the confidence threshold, it **upgrades one tier toward premium** — a ch
 model is never chosen on a coin-flip, because a wrong answer costs more in
 regeneration than the routing saved.
 
-Implementation: [`router/classifier.py`](../../../src/token_optimizer/router/classifier.py),
-[`router/router.py`](../../../src/token_optimizer/router/router.py).
+Implementation: [`skills/router/classifier.py`](../../../src/token_optimizer/skills/router/classifier.py),
+[`skills/router/router.py`](../../../src/token_optimizer/skills/router/router.py).
 
 ```bash
 tokenopt route --task "rename a variable and fix a typo"          # -> haiku

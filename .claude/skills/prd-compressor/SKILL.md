@@ -31,7 +31,7 @@ OUT OF SCOPE). Fully deterministic and offline — no API key, no model.
    checked against); tidy hedging/filler from the rest; de-dupe near-identical atoms.
 5. Re-render as terse bullets grouped by category.
 
-Implementation: [`prd/compressor.py`](../../../src/token_optimizer/prd/compressor.py).
+Implementation: [`skills/prd/compressor.py`](../../../src/token_optimizer/skills/prd/compressor.py).
 
 ## How to run
 
