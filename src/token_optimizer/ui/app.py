@@ -25,6 +25,9 @@ Launch with ``tokenopt ui`` or ``python -m token_optimizer.ui``.
 from __future__ import annotations
 
 import os
+import shutil
+import subprocess
+import sys
 import threading
 import webbrowser
 from pathlib import Path
@@ -65,6 +68,68 @@ FONT_TAG = ("Segoe UI", 10)
 FONT_METRIC = ("Segoe UI", 21, "bold")
 FONT_METRIC_LBL = ("Segoe UI", 9)
 FONT_MONO = ("Consolas", 10)
+
+
+def _speakable(s: str) -> str:
+    """Make narration text sound natural in TTS (drop symbols / markup)."""
+    for a, b in (("—", ", "), ("–", ", "), ("·", ", "), ("→", " to "),
+                 ("->", " to "), ("•", ""), ("’", "'"), ("“", '"'), ("”", '"')):
+        s = s.replace(a, b)
+    return s
+
+
+class _Narrator:
+    """Best-effort, interruptible text-to-speech for the guided demo.
+
+    Speaks via the OS engine in a subprocess — Windows SAPI (PowerShell),
+    macOS ``say``, or Linux ``espeak`` / ``espeak-ng`` — so there is no extra
+    dependency and speech stops instantly when the process is terminated. It
+    no-ops silently when no engine is available.
+    """
+
+    def __init__(self) -> None:
+        self._proc = None
+        self._cmd = None
+        self._flags = 0
+        if sys.platform.startswith("win"):
+            self._cmd = [
+                "powershell", "-NoProfile", "-Command",
+                "[Console]::InputEncoding=[System.Text.Encoding]::UTF8;"
+                "Add-Type -AssemblyName System.Speech;"
+                "$s=New-Object System.Speech.Synthesis.SpeechSynthesizer;"
+                "$s.Rate=1;$s.Speak([Console]::In.ReadToEnd())",
+            ]
+            self._flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        elif sys.platform == "darwin" and shutil.which("say"):
+            self._cmd = ["say"]
+        elif shutil.which("espeak-ng"):
+            self._cmd = ["espeak-ng", "--stdin"]
+        elif shutil.which("espeak"):
+            self._cmd = ["espeak", "--stdin"]
+        self.available = self._cmd is not None
+
+    def speak(self, text: str) -> None:
+        if not self.available or not text.strip():
+            return
+        self.stop()
+        try:
+            self._proc = subprocess.Popen(
+                self._cmd, stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                creationflags=self._flags,
+            )
+            self._proc.stdin.write(text.encode("utf-8", "ignore"))
+            self._proc.stdin.close()
+        except Exception:
+            self._proc = None
+
+    def stop(self) -> None:
+        p, self._proc = self._proc, None
+        if p is not None and p.poll() is None:
+            try:
+                p.terminate()
+            except Exception:
+                pass
 
 
 def launch() -> int:
@@ -222,6 +287,13 @@ def launch() -> int:
     mode_lbl = tk.Label(chip, text=mode_text, bg=CHIP_BG, fg="#ffffff", font=FONT_SM)
     mode_lbl.pack(side="left", padx=(0, 12), pady=4)
 
+    # Guided-demo launcher — a play-icon button in the header, beside the mode chip.
+    demo_btn = tk.Button(header, text="▶  Guided Demo", command=lambda: _play_demo(),
+                         relief="flat", cursor="hand2", font=FONT_SEMI,
+                         bg=PRIMARY, fg="#ffffff", activebackground=PRIMARY_DARK,
+                         activeforeground="#ffffff", padx=14, pady=6, borderwidth=0)
+    demo_btn.pack(side="right", padx=(0, 10), pady=16)
+
     # ── menu bar ────────────────────────────────────────────────────────────────
     def _open_docs():
         if _DOCS_PDF.exists():
@@ -259,8 +331,6 @@ def launch() -> int:
     filemenu.add_command(label="Exit", command=root.destroy)
     menubar.add_cascade(label="File", menu=filemenu)
     helpmenu = tk.Menu(menubar, tearoff=0)
-    helpmenu.add_command(label="▶  Guided Demo (auto tour)", command=lambda: _play_demo())
-    helpmenu.add_separator()
     helpmenu.add_command(label="Documentation (PDF)", command=_open_docs)
     helpmenu.add_command(label=f"About {APP_TITLE}", command=_about)
     menubar.add_cascade(label="Help", menu=helpmenu)
@@ -1091,8 +1161,23 @@ def launch() -> int:
              "Documentation (PDF), and the CLI mirrors every feature. Happy optimizing!", None),
         ]
 
-        SCENE_MS, TICK = 7000, 100
-        st = {"i": 0, "paused": False, "after": None, "prog": 0.0}
+        TICK = 100
+        narrator = _Narrator()
+        st = {"i": 0, "paused": False, "after": None, "elapsed": 0, "dur": 7000,
+              "muted": not narrator.available}
+
+        def _dur_ms(txt):
+            # Pace each scene to roughly match the spoken narration length.
+            if st["muted"] or not narrator.available:
+                return 7000
+            return max(4500, min(15000, len(txt.split()) * 370 + 900))
+
+        def _say_current():
+            sc = scenes[st["i"]]
+            spoken = sc[1] + ". " + sc[2]
+            st["dur"] = _dur_ms(spoken)
+            if not st["muted"]:
+                narrator.speak(_speakable(spoken))
 
         dw = tk.Toplevel(root)
         state["demo_win"] = dw
@@ -1134,8 +1219,10 @@ def launch() -> int:
         ctl = tk.Frame(dw, bg=SURFACE)
         ctl.pack(fill="x", pady=(6, 10))
         pause_var = tk.StringVar(value="⏸  Pause")
+        mute_var = tk.StringVar(value="🔊  Voice")
 
         def close():
+            narrator.stop()
             if st["after"]:
                 try:
                     dw.after_cancel(st["after"])
@@ -1149,7 +1236,7 @@ def launch() -> int:
                 close()
                 return
             i = max(0, i)
-            st["i"], st["prog"] = i, 0.0
+            st["i"], st["elapsed"] = i, 0
             pbar["value"] = 0
             tab, title, text, action = scenes[i]
             try:
@@ -1161,19 +1248,21 @@ def launch() -> int:
             counter_var.set(f"Step {i + 1} of {len(scenes)}")
             title_var.set(title)
             text_var.set(text)
+            _say_current()
 
         def tick():
             if not dw.winfo_exists():
                 return
             if not st["paused"]:
-                st["prog"] += TICK / SCENE_MS
-                pbar["value"] = min(100, st["prog"] * 100)
-                if st["prog"] >= 1.0:
+                st["elapsed"] += TICK
+                pbar["value"] = min(100, st["elapsed"] / st["dur"] * 100)
+                if st["elapsed"] >= st["dur"]:
                     goto(st["i"] + 1)
                     return
             st["after"] = dw.after(TICK, tick)
 
         def goto(i):
+            narrator.stop()
             if st["after"]:
                 try:
                     dw.after_cancel(st["after"])
@@ -1187,6 +1276,18 @@ def launch() -> int:
         def toggle_pause():
             st["paused"] = not st["paused"]
             pause_var.set("▶  Play" if st["paused"] else "⏸  Pause")
+            if st["paused"]:
+                narrator.stop()
+            else:
+                _say_current()
+
+        def toggle_mute():
+            st["muted"] = not st["muted"]
+            mute_var.set("🔇  Muted" if st["muted"] else "🔊  Voice")
+            if st["muted"]:
+                narrator.stop()
+            else:
+                _say_current()
 
         def _btn(parent, text, cmd, primary=False):
             return tk.Button(
@@ -1203,6 +1304,15 @@ def launch() -> int:
                   font=FONT_SM, padx=10, pady=4, cursor="hand2", bg="#e4eaf3", fg=INK,
                   activebackground="#d3ddec").pack(side="right", padx=6)
         _btn(ctl, "◀  Prev", lambda: goto(st["i"] - 1)).pack(side="right", padx=6)
+
+        # Voice on/off (left of the transport controls). Disabled if no TTS engine.
+        mute_btn = tk.Button(ctl, textvariable=mute_var, command=toggle_mute,
+                             relief="flat", font=FONT_SM, padx=10, pady=4, cursor="hand2",
+                             bg="#e4eaf3", fg=INK, activebackground="#d3ddec")
+        if not narrator.available:
+            mute_var.set("🔇  No voice")
+            mute_btn.config(state="disabled")
+        mute_btn.pack(side="left", padx=(12, 0))
 
         dw.protocol("WM_DELETE_WINDOW", close)
         goto(0)
