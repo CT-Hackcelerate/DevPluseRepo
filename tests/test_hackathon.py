@@ -14,6 +14,7 @@ from token_optimizer.eval.cost import estimate_cost  # noqa: E402
 from token_optimizer.eval.quality_rubric import score_quality  # noqa: E402
 from token_optimizer.eval.ab_runner import TestCase, run_ab_suite  # noqa: E402
 from token_optimizer.eval.datasets import sample_cases  # noqa: E402
+from token_optimizer.eval.dashboard import build_dashboard  # noqa: E402
 
 
 _SAMPLE_PRD = """
@@ -171,6 +172,47 @@ def test_ab_suite_shows_savings_and_maintains_quality():
     assert summary.avg_cost_savings_pct > 0
     assert summary.avg_optimised_quality >= summary.avg_baseline_quality
     assert summary.total_tokens_saved > 0
+
+
+# ── Headline claims — lock them so a dataset/pipeline change can't quietly
+#    regress the numbers we present to the client. ──────────────────────────
+
+def test_prd_compression_meets_67_percent_claim():
+    """Skill 1 headline: PRD input compressed by ~67% across the suite."""
+    raw = comp = 0
+    for case in sample_cases():
+        result = compress_prd(case.prd)
+        raw += result.raw_tokens
+        comp += result.compressed_tokens
+        # Every individual PRD should clear the bar, not just the average.
+        assert result.reduction_pct >= 67.0, f"{case.name}: {result.reduction_pct:.1f}%"
+    overall = 100.0 * (raw - comp) / raw
+    assert overall >= 67.0, f"overall compression {overall:.1f}% < 67%"
+
+
+def test_ab_suite_meets_savings_and_quality_targets():
+    """Validated outcome: up to 35% savings at quality >= 23/25 over 2 BUs."""
+    root = str(Path(__file__).resolve().parents[1] / "src")
+    index = build_index(root)
+    summary = run_ab_suite(sample_cases(), index)
+    assert summary.num_tests >= 8
+    assert len(summary.bus) >= 2
+    assert summary.avg_cost_savings_pct >= 35.0
+    assert summary.avg_optimised_quality >= 23.0
+    assert summary.avg_optimised_quality >= summary.avg_baseline_quality
+
+
+def test_dashboard_builds_valid_html_with_real_numbers():
+    root = str(Path(__file__).resolve().parents[1] / "src")
+    html = build_dashboard(root)
+    assert html.startswith("<!DOCTYPE html>")
+    # Three inline-SVG charts + a data table, no external assets.
+    assert html.count("<svg") == 3
+    assert "table" in html and "<tr>" in html
+    assert "http://" not in html and "https://" not in html  # fully self-contained
+    # Real KPI values are injected (not template placeholders).
+    assert "{kpis}" not in html and "{cost_chart}" not in html
+    assert "/ 25" in html
 
 
 if __name__ == "__main__":

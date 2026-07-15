@@ -33,7 +33,25 @@
       "Bash(rm -f TokenOptimizer_Documentation.pdf)",
       "Bash(git checkout *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(gh pr create --base main --head fix/offline-summarize-ordering --title 'Fix offline summarize regression; default summarize on when offline' --body ' *)",
+      "Read(//c/Program Files/GitHub CLI/**)",
+      "Bash(command -v gh.exe)",
+      "Bash(start \"\" \"https://github.com/CT-Hackcelerate/DevPluseRepo/pull/new/fix/offline-summarize-ordering\")",
+      "Bash(./.venv/Scripts/python.exe -c \"import webbrowser; webbrowser.open\\('https://github.com/CT-Hackcelerate/DevPluseRepo/pull/new/fix/offline-summarize-ordering'\\)\")",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/test_hackathon.py -q)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/ -q)",
+      "Bash(./.venv/Scripts/python.exe -m token_optimizer.cli ab-suite --repo src)",
+      "Bash(./.venv/Scripts/python.exe -m token_optimizer.cli --help)",
+      "Bash(./.venv/Scripts/python.exe -c \"import importlib.util as u; print\\('matplotlib', bool\\(u.find_spec\\('matplotlib'\\)\\)\\); print\\('streamlit', bool\\(u.find_spec\\('streamlit'\\)\\)\\)\")",
+      "Edit(/.claude/skills/prd-compressor/**)",
+      "Edit(/.claude/skills/codebase-anchor-router/**)",
+      "Bash(./.venv/Scripts/python.exe -m token_optimizer.cli dashboard --help)",
+      "Bash(./.venv/Scripts/python.exe -m token_optimizer.cli ui)",
+      "Bash(tasklist)",
+      "Bash(./.venv/Scripts/python.exe -m token_optimizer.cli dashboard --repo src --out ab_dashboard.html)",
+      "Bash(start \"\" \"ab_dashboard.html\")"
     ],
     "additionalDirectories": [
       "\\tmp"

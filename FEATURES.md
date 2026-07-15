@@ -94,6 +94,13 @@ Credentials come from the UI form or fall back to environment / `.env`.
 
 ## 5. Interfaces
 
+### Packaged skills (`.claude/skills/`)
+The two token-optimisation skills are also packaged as invokable Claude Code
+skills, each wrapping the CLI commands below:
+
+- **[`prd-compressor`](.claude/skills/prd-compressor/SKILL.md)** — Skill 1: PRD/spec/ticket compression (~67% fewer input tokens).
+- **[`codebase-anchor-router`](.claude/skills/codebase-anchor-router/SKILL.md)** — Skill 2: `file:line` anchoring (2a) + complexity-based model routing (2b).
+
 ### Desktop UI (`tokenopt ui`)
 Tkinter app (no extra deps) with Document / JIRA / GitHub tabs. **Auto-optimizes
 on load** so the token review appears immediately. Shows Original vs Optimized
@@ -104,6 +111,11 @@ Counted-via. Writes `optimized_output.txt` and a per-run log.
 | Command | Purpose |
 |---|---|
 | `optimize-doc --file F [--summarize] [--out O]` | Optimize a document. |
+| `compress-prd --file F [--out O]` | **Skill 1** — compress a verbose PRD into dense requirement atoms (~67% fewer input tokens). |
+| `anchor-plan --plan F [--repo R]` | **Skill 2a** — anchor each plan step (one per line) to real `file:line` references; flags unresolved (hallucinated) symbols. |
+| `route --task "…"` | **Skill 2b** — classify a task's complexity and route it to the cheapest capable model. |
+| `ab-suite [--repo R]` | **Eval** — run the 8-case, 2-BU A/B suite (baseline vs optimised) and print cost/token/quality deltas. |
+| `dashboard [--repo R] [--out O]` | **Eval** — render the A/B results to a self-contained HTML dashboard (inline-SVG charts, no deps). |
 | `ui` | Launch the desktop UI. |
 | `triage-jira --jql Q [--max N]` | Triage JIRA issues. |
 | `triage-jenkins --job J [--build B]` | Root-cause a Jenkins failure. |

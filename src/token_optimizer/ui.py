@@ -10,6 +10,13 @@ Whatever the source, the fetched text is optimized (deterministic reductions +
 optional summarization), shown original-vs-optimized with a token review, written
 to ``optimized_output.txt``, and logged to ``logs/``.
 
+A second top-level tab, **Feature-Dev Skills**, exposes the token-optimisation
+skills in-app (2-column card grid on the left, result console on the right): PRD
+compression (Skill 1), codebase ``file:line`` anchoring (Skill 2a),
+complexity-based model routing (Skill 2b), and the 8-case / 2-BU A/B validation
+suite. A third **Dashboard** tab renders the A/B results as native bar charts
+(cost & quality per case) with KPI tiles and a one-click interactive HTML export.
+
 Connection fields fall back to your environment / .env when left blank.
 
 Launch with ``tokenopt ui`` or ``python -m token_optimizer.ui``.
@@ -70,8 +77,15 @@ def launch() -> int:
 
     root = tk.Tk()
     root.title(f"{APP_TITLE} — {APP_TAGLINE}")
-    root.geometry("1200x920")
-    root.minsize(980, 720)
+    # Size to fit the usable display so content never runs behind the taskbar or
+    # off the screen edge. winfo_screenheight over-reports (it ignores the taskbar),
+    # so subtract a generous margin; the 1x4 skill row is fixed-height and the
+    # result console absorbs the slack, so the layout stays fully visible without
+    # scrolling even on short / scaled monitors.
+    win_w = min(1280, root.winfo_screenwidth() - 60)
+    win_h = min(900, root.winfo_screenheight() - 120)
+    root.geometry(f"{win_w}x{win_h}+16+8")
+    root.minsize(min(960, win_w), min(640, win_h))
     root.configure(bg=BG)
 
     # ── theme ───────────────────────────────────────────────────────────────
@@ -181,7 +195,7 @@ def launch() -> int:
     header = tk.Frame(root, bg=HEADER_BG)
     header.pack(fill="x")
     hleft = tk.Frame(header, bg=HEADER_BG)
-    hleft.pack(side="left", padx=20, pady=14)
+    hleft.pack(side="left", padx=20, pady=9)
     # Logo mark: a rounded square with the initials.
     mark = tk.Label(hleft, text="T:O", bg=PRIMARY, fg="#ffffff",
                     font=("Segoe UI Semibold", 15), padx=10, pady=4)
@@ -199,7 +213,7 @@ def launch() -> int:
     else:
         mode_text, mode_color = "Mode: Offline", "#8fb4e0"
     chip = tk.Frame(header, bg=CHIP_BG)
-    chip.pack(side="right", padx=20, pady=18)
+    chip.pack(side="right", padx=20, pady=12)
     tk.Label(chip, text="●", bg=CHIP_BG, fg=mode_color, font=("Segoe UI", 10)).pack(
         side="left", padx=(10, 4), pady=4)
     tk.Label(chip, text=mode_text, bg=CHIP_BG, fg="#ffffff", font=FONT_SM).pack(
@@ -253,11 +267,24 @@ def launch() -> int:
     body = ttk.Frame(root, padding=(16, 14))
     body.pack(fill="both", expand=True)
 
-    left = ttk.Frame(body, width=390)
+    # Top-level tabs: the classic optimizer, and the feature-dev skills console
+    # (PRD compression, codebase anchoring, model routing, A/B validation).
+    main_nb = ttk.Notebook(body)
+    main_nb.pack(fill="both", expand=True)
+
+    optimize_tab = ttk.Frame(main_nb, style="TFrame", padding=(4, 10))
+    main_nb.add(optimize_tab, text="  Token Optimizer  ")
+    skills_tab = ttk.Frame(main_nb, style="TFrame", padding=(4, 10))
+    main_nb.add(skills_tab, text="  Feature-Dev Skills  ")
+    dash_tab = ttk.Frame(main_nb, style="TFrame", padding=(4, 10))
+    main_nb.add(dash_tab, text="  Dashboard  ")
+    main_nb.enable_traversal()  # Ctrl+Tab / Ctrl+Shift+Tab switch tabs
+
+    left = ttk.Frame(optimize_tab, width=390)
     left.pack(side="left", fill="y", padx=(0, 14))
     left.pack_propagate(False)  # keep the config column at a fixed width
 
-    right = ttk.Frame(body)
+    right = ttk.Frame(optimize_tab)
     right.pack(side="left", fill="both", expand=True)
 
     # -- Source card (notebook) --
@@ -470,6 +497,425 @@ def launch() -> int:
     tk.Label(statusbar, text=f"v{_app_version()}", bg="#dbe3ef", fg=MUTED, font=FONT_SM,
              padx=14).pack(side="right")
 
+    # ══ Feature-Dev Skills tab ══════════════════════════════════════════════════
+    # The token-optimisation skills that match the customer ask, viewable in-app:
+    # PRD compression (Skill 1), codebase anchoring (2a), model routing (2b), and
+    # the A/B validation suite + dashboard. Each runs off the main thread.
+    skills_state: dict = {"prd": ""}
+
+    # Layout: all four skill cards in a 2-column grid on the LEFT half of the
+    # window; the shared result console fills the RIGHT half. Charts/KPIs live on
+    # the separate Dashboard tab.
+    sk_content = ttk.Frame(skills_tab)
+    sk_content.pack(fill="both", expand=True)
+    sk_content.columnconfigure(0, weight=1, uniform="sk_half")
+    sk_content.columnconfigure(1, weight=1, uniform="sk_half")
+    sk_content.rowconfigure(0, weight=1)
+
+    sk_left = ttk.Frame(sk_content)
+    sk_left.grid(row=0, column=0, sticky="nsew", padx=(0, 12))
+    for _i in (0, 1):
+        sk_left.columnconfigure(_i, weight=1, uniform="sk_col")
+        sk_left.rowconfigure(_i, weight=1, uniform="sk_row")
+    cell_s1 = ttk.Frame(sk_left)
+    cell_s1.grid(row=0, column=0, sticky="nsew", padx=(0, 6), pady=(0, 6))
+    cell_s2 = ttk.Frame(sk_left)
+    cell_s2.grid(row=0, column=1, sticky="nsew", padx=(6, 0), pady=(0, 6))
+    cell_s3 = ttk.Frame(sk_left)
+    cell_s3.grid(row=1, column=0, sticky="nsew", padx=(0, 6), pady=(6, 0))
+    cell_s4 = ttk.Frame(sk_left)
+    cell_s4.grid(row=1, column=1, sticky="nsew", padx=(6, 0), pady=(6, 0))
+
+    sk_right = ttk.Frame(sk_content)
+    sk_right.grid(row=0, column=1, sticky="nsew")
+    res_card = _card(sk_right, fill="both", expand=True)
+    ttk.Label(res_card, text="Result", style="CardHeading.TLabel").pack(anchor="w", pady=(0, 8))
+    skills_out = tk.Text(res_card, wrap="word", font=FONT_MONO, relief="flat",
+                         bg=SURFACE, fg=INK, padx=10, pady=8, borderwidth=0,
+                         height=12, highlightthickness=0)
+    _skills_scroll = ttk.Scrollbar(res_card, command=skills_out.yview)
+    skills_out.configure(yscrollcommand=_skills_scroll.set, state="disabled")
+    _skills_scroll.pack(side="right", fill="y")
+    skills_out.pack(side="left", fill="both", expand=True)
+
+    def _skills_print(content: str) -> None:
+        skills_out.config(state="normal")
+        skills_out.delete("1.0", "end")
+        skills_out.insert("1.0", content)
+        skills_out.config(state="disabled")
+
+    # -- Skill 1: PRD compression --
+    c1 = _card(cell_s1, fill="both", expand=True)
+    ttk.Label(c1, text="Skill 1 · PRD Compression", style="CardHeading.TLabel").pack(
+        anchor="w", pady=(0, 4))
+    ttk.Label(c1, text="Compresses PRD input ~67% into structured requirement atoms.",
+              style="CardMuted.TLabel", wraplength=260, justify="left").pack(
+        anchor="w", pady=(0, 8))
+    prd_path_var = tk.StringVar(value="No PRD selected.")
+    b1row = ttk.Frame(c1, style="Card.TFrame")
+    b1row.pack(fill="x")
+    prd_btn = ttk.Button(b1row, text="Select PRD…", style="Secondary.TButton",
+                         command=lambda: choose_prd())
+    prd_btn.pack(side="left")
+    compress_btn = ttk.Button(b1row, text="Compress PRD  ▸", style="Primary.TButton",
+                              command=lambda: do_compress())
+    compress_btn.pack(side="left", padx=(8, 0))
+    compress_btn.config(state="disabled")
+    ttk.Label(c1, textvariable=prd_path_var, style="CardMuted.TLabel",
+              wraplength=260).pack(anchor="w", pady=(8, 0))
+
+    def choose_prd() -> None:
+        filetypes = [
+            ("Documents", " ".join(f"*{e}" for e in SUPPORTED_EXTENSIONS)),
+            ("All files", "*.*"),
+        ]
+        path = filedialog.askopenfilename(title="Select a PRD", filetypes=filetypes)
+        if not path:
+            return
+        try:
+            text = read_document(path)
+        except Exception as exc:
+            messagebox.showerror("Could not read PRD", str(exc))
+            return
+        skills_state["prd"] = text
+        prd_path_var.set(path)
+        compress_btn.config(state="normal")
+
+    def do_compress() -> None:
+        text = skills_state.get("prd", "")
+        if not text:
+            return
+
+        def work():
+            from .prd.compressor import compress_prd
+            return compress_prd(text)
+
+        def ok(r) -> None:
+            _skills_print(
+                "PRD COMPRESSION (Skill 1)\n" + "=" * 52 + "\n"
+                f"raw: {r.raw_tokens} tokens   ->   compressed: {r.compressed_tokens} tokens\n"
+                f"saved {r.tokens_saved} tokens  ({r.reduction_pct:.1f}% smaller)\n"
+                f"{len(r.atoms)} requirement atoms kept, {r.dropped_units} units dropped\n\n"
+                + r.compressed_text
+            )
+            stats_var.set(
+                f"PRD compressed: {r.reduction_pct:.1f}% smaller "
+                f"({r.raw_tokens}->{r.compressed_tokens} tok)"
+            )
+
+        _run_bg(work, ok, busy="Compressing PRD…")
+
+    # -- Skill 2b: model router --
+    c2 = _card(cell_s2, fill="both", expand=True)
+    ttk.Label(c2, text="Skill 2b · Model Router", style="CardHeading.TLabel").pack(
+        anchor="w", pady=(0, 4))
+    ttk.Label(c2, text="Routes each task to the cheapest capable model by complexity.",
+              style="CardMuted.TLabel", wraplength=260, justify="left").pack(
+        anchor="w", pady=(0, 8))
+    task_var = tk.StringVar()
+    ttk.Entry(c2, textvariable=task_var).pack(fill="x")
+    route_btn = ttk.Button(c2, text="Route Task  ▸", style="Primary.TButton",
+                           command=lambda: do_route())
+    route_btn.pack(anchor="w", pady=(8, 0))
+
+    def do_route() -> None:
+        task = task_var.get().strip()
+        if not task:
+            messagebox.showwarning("Task required", "Enter a task description to route.")
+            return
+
+        def work():
+            from .router.router import RouterConfig, route_task
+            return route_task(task, RouterConfig())
+
+        def ok(rt) -> None:
+            cls = rt.classification
+            up = "  (upgraded to premium: low confidence)" if rt.upgraded else ""
+            _skills_print(
+                "MODEL ROUTING (Skill 2b)\n" + "=" * 52 + "\n"
+                f"task:        {rt.task}\n\n"
+                f"complexity:  {rt.complexity.value}\n"
+                f"confidence:  {rt.confidence:.2f}{up}\n"
+                f"model:       {rt.model}\n\n"
+                f"signals:     {cls.signals if cls else {}}"
+            )
+            stats_var.set(f"Routed: {rt.complexity.value} -> {rt.model}")
+
+        _run_bg(work, ok, busy="Routing task…")
+
+    action_buttons.append(route_btn)
+
+    # -- Skill 2a: codebase anchoring --
+    c3 = _card(cell_s3, fill="both", expand=True)
+    ttk.Label(c3, text="Skill 2a · Codebase Anchoring", style="CardHeading.TLabel").pack(
+        anchor="w", pady=(0, 4))
+    ttk.Label(c3, text="Anchors plan steps to real file:line refs; flags hallucinations.",
+              style="CardMuted.TLabel", wraplength=260, justify="left").pack(
+        anchor="w", pady=(0, 8))
+    repo_var = tk.StringVar(value=str(_PROJECT_ROOT / "src"))
+    rrow = ttk.Frame(c3, style="Card.TFrame")
+    rrow.pack(fill="x")
+    ttk.Label(rrow, text="Repo:", style="Card.TLabel").pack(side="left", padx=(0, 6))
+    ttk.Entry(rrow, textvariable=repo_var).pack(side="left", fill="x", expand=True)
+    plan_txt = tk.Text(c3, height=2, wrap="word", font=FONT_MONO, relief="flat",
+                       bg="#f4f7fb", fg=INK, padx=8, pady=6, highlightthickness=1,
+                       highlightbackground=BORDER, insertbackground=INK)
+    plan_txt.pack(fill="both", expand=True, pady=(8, 0))
+    plan_txt.insert("1.0", "Call compress_prd on the PRD text\n"
+                    "Use build_index to index the repository\n")
+    anchor_btn = ttk.Button(c3, text="Anchor Plan  ▸", style="Primary.TButton",
+                            command=lambda: do_anchor())
+    anchor_btn.pack(anchor="w", pady=(8, 0))
+
+    def do_anchor() -> None:
+        steps = [ln.strip() for ln in plan_txt.get("1.0", "end").splitlines() if ln.strip()]
+        repo = repo_var.get().strip() or "."
+        if not steps:
+            messagebox.showwarning("Plan required", "Enter at least one plan step.")
+            return
+
+        def work():
+            from .anchor.anchor import anchor_plan, anchoring_accuracy
+            from .anchor.indexer import build_index
+            index = build_index(repo)
+            anchors = anchor_plan(steps, index)
+            return len(index), anchors, anchoring_accuracy(anchors)
+
+        def ok(res) -> None:
+            nsym, anchors, acc = res
+            unresolved = sum(1 for a in anchors if a.unresolved_terms)
+            lines = [
+                "CODEBASE ANCHORING (Skill 2a)\n" + "=" * 52,
+                f"indexed {nsym} symbols in {repo}",
+                f"anchoring accuracy {acc * 100:.0f}%   |   "
+                f"{unresolved} step(s) with unresolved refs\n",
+            ]
+            lines.extend(a.render() for a in anchors)
+            _skills_print("\n".join(lines))
+            stats_var.set(
+                f"Anchored {len(anchors)} step(s): {acc * 100:.0f}% accuracy, "
+                f"{unresolved} unresolved"
+            )
+
+        _run_bg(work, ok, busy="Indexing & anchoring…")
+
+    action_buttons.append(anchor_btn)
+
+    # -- Validation: A/B suite (text summary here; charts on the Dashboard tab) --
+    c4 = _card(cell_s4, fill="both", expand=True)
+    ttk.Label(c4, text="Validation · A/B Suite", style="CardHeading.TLabel").pack(
+        anchor="w", pady=(0, 4))
+    ttk.Label(c4, text="Baseline vs optimised across 8 cases / 2 BUs.",
+              style="CardMuted.TLabel", wraplength=260, justify="left").pack(
+        anchor="w", pady=(0, 8))
+    ab_row = ttk.Frame(c4, style="Card.TFrame")
+    ab_row.pack(fill="x")
+    ab_btn = ttk.Button(ab_row, text="Run A/B Suite  ▸", style="Primary.TButton",
+                        command=lambda: do_ab())
+    ab_btn.pack(side="left")
+    charts_btn = ttk.Button(ab_row, text="Charts  ▸", style="Secondary.TButton",
+                            command=lambda: main_nb.select(dash_tab))
+    charts_btn.pack(side="left", padx=(8, 0))
+
+    def do_ab() -> None:
+        def work():
+            from .anchor.indexer import build_index
+            from .eval.ab_runner import run_ab_suite
+            from .eval.datasets import sample_cases
+            index = build_index(str(_PROJECT_ROOT / "src"))
+            return run_ab_suite(sample_cases(), index)
+
+        def ok(summ) -> None:
+            lines = [summ.summary(), "", "per-case:"]
+            lines.extend("  " + r.summary() for r in summ.results)
+            _skills_print("\n".join(lines))
+            stats_var.set(
+                f"A/B: {summ.avg_cost_savings_pct:.0f}% saved, "
+                f"quality {summ.avg_optimised_quality:.1f}/25"
+            )
+
+        _run_bg(work, ok, busy="Running A/B suite…")
+
+    action_buttons.append(ab_btn)
+
+    # ══ Dashboard tab ═══════════════════════════════════════════════════════════
+    # Visual A/B results: KPI tiles + native bar charts (cost & quality per case),
+    # plus a button to open the full interactive HTML dashboard in a browser.
+    dsh_state: dict = {"summary": None, "loaded": False}
+
+    dsh_top = ttk.Frame(dash_tab)
+    dsh_top.pack(fill="x", pady=(0, 10))
+    ttk.Label(dsh_top, text="A/B Validation — baseline vs optimised (8 cases / 2 BUs)",
+              style="TLabel", font=FONT_SEMI).pack(side="left")
+    dsh_run_btn = ttk.Button(dsh_top, text="Run A/B & Refresh  ▸", style="Primary.TButton",
+                             command=lambda: do_dash_run())
+    dsh_run_btn.pack(side="right")
+    dsh_html_btn = ttk.Button(dsh_top, text="Open HTML Dashboard", style="Secondary.TButton",
+                              command=lambda: do_dash_html())
+    dsh_html_btn.pack(side="right", padx=(0, 8))
+
+    dsh_kpi = ttk.Frame(dash_tab)
+    dsh_kpi.pack(fill="x", pady=(0, 12))
+    dsh_save = tk.StringVar(value="—")
+    dsh_comp = tk.StringVar(value="—")
+    dsh_qual = tk.StringVar(value="—")
+    dsh_tok = tk.StringVar(value="—")
+
+    def _dsh_card(col: int, title: str, var: tk.StringVar, color: str) -> None:
+        outer = tk.Frame(dsh_kpi, bg=BORDER)
+        outer.grid(row=0, column=col, sticky="nsew", padx=(0 if col == 0 else 10, 0))
+        inner = tk.Frame(outer, bg=SURFACE)
+        inner.pack(fill="both", expand=True, padx=1, pady=1)
+        tk.Frame(inner, bg=color, height=3).pack(fill="x")
+        pad = tk.Frame(inner, bg=SURFACE)
+        pad.pack(fill="both", expand=True, padx=16, pady=(8, 10))
+        tk.Label(pad, text=title.upper(), bg=SURFACE, fg=MUTED,
+                 font=("Segoe UI", 8, "bold")).pack(anchor="w")
+        tk.Label(pad, textvariable=var, bg=SURFACE, fg=color,
+                 font=("Segoe UI", 20, "bold")).pack(anchor="w")
+        dsh_kpi.columnconfigure(col, weight=1)
+
+    _dsh_card(0, "Avg cost saved", dsh_save, SUCCESS)
+    _dsh_card(1, "Avg PRD compression", dsh_comp, INFO)
+    _dsh_card(2, "Avg quality (optimised)", dsh_qual, PRIMARY)
+    _dsh_card(3, "Total tokens saved", dsh_tok, MUTED)
+
+    charts_wrap = ttk.Frame(dash_tab)
+    charts_wrap.pack(fill="both", expand=True)
+    charts_wrap.columnconfigure(0, weight=1, uniform="ch")
+    charts_wrap.columnconfigure(1, weight=1, uniform="ch")
+    charts_wrap.rowconfigure(0, weight=1)
+
+    def _chart_card(col: int, title: str):
+        cell = ttk.Frame(charts_wrap)
+        cell.grid(row=0, column=col, sticky="nsew", padx=(0, 6) if col == 0 else (6, 0))
+        card = _card(cell, fill="both", expand=True)
+        ttk.Label(card, text=title, style="CardHeading.TLabel").pack(anchor="w", pady=(0, 6))
+        canvas = tk.Canvas(card, bg=SURFACE, highlightthickness=0)
+        canvas.pack(fill="both", expand=True)
+        return canvas
+
+    cost_canvas = _chart_card(0, "Cost per feature request ($) — lower is better")
+    qual_canvas = _chart_card(1, "Plan quality (/25) — higher is better")
+
+    def _draw_chart(canvas, series, y_max, value_fmt, cats) -> None:
+        canvas.delete("all")
+        w = canvas.winfo_width()
+        h = canvas.winfo_height()
+        if w < 60 or h < 60:
+            return
+        ml, mr, mt, mb = 42, 12, 22, 56
+        pw, ph = w - ml - mr, h - mt - mb
+        base = mt + ph
+        for i in range(5):
+            yy = base - ph * i / 4
+            canvas.create_line(ml, yy, w - mr, yy, fill="#e6e9f0")
+            canvas.create_text(ml - 6, yy, text=value_fmt(y_max * i / 4), anchor="e",
+                               fill=MUTED, font=("Segoe UI", 7))
+        # legend (top-left)
+        lx = ml
+        for label, color, _vals in series:
+            canvas.create_rectangle(lx, 4, lx + 9, 13, fill=color, outline="")
+            canvas.create_text(lx + 13, 9, text=label, anchor="w", fill=MUTED,
+                               font=("Segoe UI", 7))
+            lx += 22 + len(label) * 6
+        n = len(series)
+        bandw = pw / max(1, len(cats))
+        colw = min(16.0, (bandw * 0.72 - (n - 1) * 2) / n)
+        groupw = n * colw + (n - 1) * 2
+        for ci, cat in enumerate(cats):
+            bx = ml + ci * bandw
+            gx = bx + (bandw - groupw) / 2
+            for si, (_label, color, vals) in enumerate(series):
+                v = vals[ci]
+                bh = (v / y_max) * ph if y_max else 0
+                x = gx + si * (colw + 2)
+                canvas.create_rectangle(x, base - bh, x + colw, base, fill=color, outline="")
+            canvas.create_text(bx + bandw / 2, base + 6, text=cat, anchor="e", angle=32,
+                               fill=MUTED, font=("Segoe UI", 7))
+
+    def _redraw_charts(_evt=None) -> None:
+        summ = dsh_state["summary"]
+        if summ is None:
+            for cv, msg in ((cost_canvas, "Click “Run A/B & Refresh” to draw the cost chart."),
+                            (qual_canvas, "Click “Run A/B & Refresh” to draw the quality chart.")):
+                cv.delete("all")
+                w, h = cv.winfo_width(), cv.winfo_height()
+                if w > 60:
+                    cv.create_text(w / 2, h / 2, text=msg, fill=MUTED, font=FONT_SM)
+            return
+        cats = [r.name for r in summ.results]
+        _draw_chart(
+            cost_canvas,
+            [("Baseline", INFO, [r.baseline.cost_usd for r in summ.results]),
+             ("Optimised", SUCCESS, [r.optimised.cost_usd for r in summ.results])],
+            max([r.baseline.cost_usd for r in summ.results] + [1e-9]) * 1.15,
+            lambda v: f"${v:.3f}", cats,
+        )
+        _draw_chart(
+            qual_canvas,
+            [("Baseline", INFO, [float(r.baseline.quality.total) for r in summ.results]),
+             ("Optimised", SUCCESS, [float(r.optimised.quality.total) for r in summ.results])],
+            25.0, lambda v: f"{v:.0f}", cats,
+        )
+
+    cost_canvas.bind("<Configure>", _redraw_charts)
+    qual_canvas.bind("<Configure>", _redraw_charts)
+
+    def do_dash_run() -> None:
+        def work():
+            from .anchor.indexer import build_index
+            from .eval.ab_runner import run_ab_suite
+            from .eval.datasets import sample_cases
+            from .prd.compressor import compress_prd
+            index = build_index(str(_PROJECT_ROOT / "src"))
+            summ = run_ab_suite(sample_cases(), index)
+            by_name = {c.name: c for c in sample_cases()}
+            raw = comp = 0
+            for r in summ.results:
+                cr = compress_prd(by_name[r.name].prd)
+                raw += cr.raw_tokens
+                comp += cr.compressed_tokens
+            overall = 100.0 * (raw - comp) / raw if raw else 0.0
+            return summ, overall
+
+        def ok(res) -> None:
+            summ, overall = res
+            dsh_state["summary"] = summ
+            dsh_save.set(f"{summ.avg_cost_savings_pct:.0f}%")
+            dsh_comp.set(f"{overall:.0f}%")
+            dsh_qual.set(f"{summ.avg_optimised_quality:.1f} / 25")
+            dsh_tok.set(f"{summ.total_tokens_saved:,}")
+            _redraw_charts()
+            stats_var.set(
+                f"Dashboard updated: {summ.avg_cost_savings_pct:.0f}% saved, "
+                f"quality {summ.avg_optimised_quality:.1f}/25"
+            )
+
+        _run_bg(work, ok, busy="Running A/B suite…")
+
+    def do_dash_html() -> None:
+        def work():
+            from .eval.dashboard import write_dashboard
+            return write_dashboard(str(_PROJECT_ROOT / "ab_dashboard.html"),
+                                   repo=str(_PROJECT_ROOT / "src"))
+
+        def ok(path) -> None:
+            webbrowser.open(Path(path).as_uri())
+            stats_var.set(f"HTML dashboard opened: {os.path.basename(path)}")
+
+        _run_bg(work, ok, busy="Building HTML dashboard…")
+
+    action_buttons.append(dsh_run_btn)
+
+    # Auto-run the suite the first time the Dashboard tab is opened.
+    def _on_tab_changed(_evt=None) -> None:
+        if main_nb.select() == str(dash_tab) and not dsh_state["loaded"]:
+            dsh_state["loaded"] = True
+            do_dash_run()
+
+    main_nb.bind("<<NotebookTabChanged>>", _on_tab_changed)
+
     # ── optimize action ────────────────────────────────────────────────────────
     def run_optimize() -> None:
         if not state["text"]:
@@ -513,6 +959,13 @@ def launch() -> int:
             f"stages: {', '.join(result.stages) or 'none'}   |   tier: {tier}   |   "
             f"saved to: {OUTPUT_FILE.name}{log_note}"
         )
+
+    # Optional launch hook: open straight to a given tab (handy for demos/tests).
+    _tab = os.environ.get("TOKENOPT_UI_TAB", "").lower()
+    if _tab in ("skills", "feature-dev", "2"):
+        main_nb.select(skills_tab)
+    elif _tab in ("dashboard", "dash", "3"):
+        main_nb.select(dash_tab)
 
     root.mainloop()
     return 0
