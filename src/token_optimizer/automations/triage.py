@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..config import Config
+from ..core.config import Config
 from ..integrations.jenkins import JenkinsConnector
 from ..integrations.jira import JiraConnector
 from ..optimize.compress import compress_text

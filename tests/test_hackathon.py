@@ -5,16 +5,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from token_optimizer.prd.compressor import compress_prd, render_atoms  # noqa: E402
-from token_optimizer.anchor.indexer import build_index, CodebaseIndex  # noqa: E402
-from token_optimizer.anchor.anchor import anchor_plan, anchoring_accuracy  # noqa: E402
-from token_optimizer.router.classifier import Complexity, classify_task  # noqa: E402
-from token_optimizer.router.router import RouterConfig, route_task  # noqa: E402
-from token_optimizer.eval.cost import estimate_cost  # noqa: E402
-from token_optimizer.eval.quality_rubric import score_quality  # noqa: E402
-from token_optimizer.eval.ab_runner import TestCase, run_ab_suite  # noqa: E402
-from token_optimizer.eval.datasets import sample_cases  # noqa: E402
-from token_optimizer.eval.dashboard import build_dashboard  # noqa: E402
+from token_optimizer.skills.prd.compressor import compress_prd, render_atoms  # noqa: E402
+from token_optimizer.skills.anchor.indexer import build_index, CodebaseIndex  # noqa: E402
+from token_optimizer.skills.anchor.anchor import anchor_plan, anchoring_accuracy  # noqa: E402
+from token_optimizer.skills.router.classifier import Complexity, classify_task  # noqa: E402
+from token_optimizer.skills.router.router import RouterConfig, route_task  # noqa: E402
+from token_optimizer.evaluation.cost import estimate_cost  # noqa: E402
+from token_optimizer.evaluation.quality_rubric import score_quality  # noqa: E402
+from token_optimizer.evaluation.ab_runner import TestCase, run_ab_suite  # noqa: E402
+from token_optimizer.evaluation.datasets import sample_cases  # noqa: E402
+from token_optimizer.evaluation.dashboard import build_dashboard  # noqa: E402
 
 
 _SAMPLE_PRD = """

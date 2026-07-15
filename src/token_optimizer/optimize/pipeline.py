@@ -11,9 +11,9 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from ..config import Config
-from ..llm.cache import ResponseCache
-from ..llm.client import ClaudeClient
+from ..core.config import Config
+from ..core.llm.cache import ResponseCache
+from ..core.llm.client import ClaudeClient
 from .compress import compress_text
 from .prefilter import prefilter_fields
 from .summarize import summarize_if_large

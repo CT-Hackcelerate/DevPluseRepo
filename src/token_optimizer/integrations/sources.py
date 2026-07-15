@@ -4,7 +4,7 @@ These helpers turn a live connection into the same plain text the document reade
 produces, so the optimizer and UI can treat JIRA issues and GitHub pull requests
 exactly like a Word document: fetch → text → optimize → token review.
 
-Credentials come from a :class:`~token_optimizer.config.Config`. ``build_config``
+Credentials come from a :class:`~token_optimizer.core.config.Config`. ``build_config``
 lets the UI override the env/.env values with fields typed into the connection form.
 """
 
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..config import Config
+from ..core.config import Config
 
 
 def build_config(**overrides: str) -> Config:

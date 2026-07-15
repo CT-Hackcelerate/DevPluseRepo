@@ -29,14 +29,14 @@ import threading
 import webbrowser
 from pathlib import Path
 
-from .config import Config
-from .integrations.document import SUPPORTED_EXTENSIONS, read_document
-from .integrations.sources import build_config, fetch_github_text, fetch_jira_text
-from .optimize.text_pipeline import TextOptimizer, write_output
+from ..core.config import Config
+from ..integrations.document import SUPPORTED_EXTENSIONS, read_document
+from ..integrations.sources import build_config, fetch_github_text, fetch_jira_text
+from ..optimize.text_pipeline import TextOptimizer, write_output
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
 OUTPUT_FILE = _PROJECT_ROOT / "optimized_output.txt"
-_DOCS_PDF = _PROJECT_ROOT / "documents" / "TokenOptimizer_Documentation.pdf"
+_DOCS_PDF = _PROJECT_ROOT / "docs" / "TokenOptimizer_Documentation.pdf"
 
 APP_TITLE = "TokenOptimizer"
 APP_TAGLINE = "Enterprise Token Optimization Console"
@@ -74,6 +74,9 @@ def launch() -> int:
     config = Config()
     state: dict = {"text": ""}
     action_buttons: list = []
+    # The API key present at launch (env / .env), captured before any UI override so
+    # clearing the in-app field reverts to it rather than to nothing.
+    env_api_key = config.anthropic_api_key
 
     root = tk.Tk()
     root.title(f"{APP_TITLE} — {APP_TAGLINE}")
@@ -214,10 +217,10 @@ def launch() -> int:
         mode_text, mode_color = "Mode: Offline", "#8fb4e0"
     chip = tk.Frame(header, bg=CHIP_BG)
     chip.pack(side="right", padx=20, pady=12)
-    tk.Label(chip, text="●", bg=CHIP_BG, fg=mode_color, font=("Segoe UI", 10)).pack(
-        side="left", padx=(10, 4), pady=4)
-    tk.Label(chip, text=mode_text, bg=CHIP_BG, fg="#ffffff", font=FONT_SM).pack(
-        side="left", padx=(0, 12), pady=4)
+    mode_dot = tk.Label(chip, text="●", bg=CHIP_BG, fg=mode_color, font=("Segoe UI", 10))
+    mode_dot.pack(side="left", padx=(10, 4), pady=4)
+    mode_lbl = tk.Label(chip, text=mode_text, bg=CHIP_BG, fg="#ffffff", font=FONT_SM)
+    mode_lbl.pack(side="left", padx=(0, 12), pady=4)
 
     # ── menu bar ────────────────────────────────────────────────────────────────
     def _open_docs():
@@ -256,6 +259,8 @@ def launch() -> int:
     filemenu.add_command(label="Exit", command=root.destroy)
     menubar.add_cascade(label="File", menu=filemenu)
     helpmenu = tk.Menu(menubar, tearoff=0)
+    helpmenu.add_command(label="▶  Guided Demo (auto tour)", command=lambda: _play_demo())
+    helpmenu.add_separator()
     helpmenu.add_command(label="Documentation (PDF)", command=_open_docs)
     helpmenu.add_command(label=f"About {APP_TITLE}", command=_about)
     menubar.add_cascade(label="Help", menu=helpmenu)
@@ -324,6 +329,21 @@ def launch() -> int:
         row=0, column=1, sticky="w", padx=12)
     doc_tab.columnconfigure(1, weight=1)
     action_buttons.append(doc_btn)
+
+    # Optional Claude API key — lets the user opt into AI-model optimization
+    # (Haiku summarization + exact token counts) for a more effective result.
+    ttk.Label(doc_tab, text="Anthropic API key", style="Card.TLabel").grid(
+        row=1, column=0, sticky="w", pady=(12, 2))
+    doc_api_key_var = tk.StringVar(value="")
+    ttk.Entry(doc_tab, textvariable=doc_api_key_var, show="•").grid(
+        row=1, column=1, sticky="we", padx=12, pady=(12, 2))
+    ttk.Label(
+        doc_tab,
+        text="Optional — enables Claude (Haiku) summarization and exact token counts "
+             "for a more effective result. Leave blank to stay fully offline; a key set "
+             "in your .env is used automatically.",
+        style="CardMuted.TLabel", wraplength=430, justify="left",
+    ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(2, 0))
 
     # JIRA tab
     jira_tab = ttk.Frame(sources, style="Card.TFrame", padding=14)
@@ -411,15 +431,33 @@ def launch() -> int:
     # reduction). Default OFF when an API key is set so auto-optimize on load
     # doesn't spend cloud tokens without the user asking.
     summarize_var = tk.BooleanVar(value=not config.anthropic_api_key)
-    if config.anthropic_api_key:
-        summarize_label = "Summarize with Claude (Haiku)"
-    elif config.local_model:
-        summarize_label = "Summarize with local model"
-    else:
-        summarize_label = "Summarize (offline extractive — no API key)"
     # Stacked layout — the config column is narrow, so options sit above the button.
-    ttk.Checkbutton(act_row, text=summarize_label, variable=summarize_var,
-                    style="Card.TCheckbutton").pack(anchor="w")
+    summarize_chk = ttk.Checkbutton(act_row, variable=summarize_var,
+                                    style="Card.TCheckbutton")
+    summarize_chk.pack(anchor="w")
+
+    def _effective_api_key() -> str:
+        """The key actually used: the UI field if filled, else the env / .env key."""
+        return doc_api_key_var.get().strip() or env_api_key
+
+    def _refresh_mode(*_args) -> None:
+        """Reflect the effective key in the summarize label and the header mode chip."""
+        if _effective_api_key():
+            summarize_chk.config(text="Summarize with Claude (Haiku)")
+            mode_dot.config(fg="#2ecc71")
+            mode_lbl.config(text="Mode: Claude API")
+        elif config.local_model:
+            summarize_chk.config(text="Summarize with local model")
+            mode_dot.config(fg="#f1c40f")
+            mode_lbl.config(text="Mode: Local model")
+        else:
+            summarize_chk.config(text="Summarize (offline extractive — no API key)")
+            mode_dot.config(fg="#8fb4e0")
+            mode_lbl.config(text="Mode: Offline")
+
+    # Update the label/chip live as the user types or clears the key.
+    doc_api_key_var.trace_add("write", _refresh_mode)
+    _refresh_mode()
 
     btn_row = ttk.Frame(act_card, style="Card.TFrame")
     btn_row.pack(fill="x", pady=(10, 0))
@@ -587,7 +625,7 @@ def launch() -> int:
             return
 
         def work():
-            from .prd.compressor import compress_prd
+            from ..skills.prd.compressor import compress_prd
             return compress_prd(text)
 
         def ok(r) -> None:
@@ -625,7 +663,7 @@ def launch() -> int:
             return
 
         def work():
-            from .router.router import RouterConfig, route_task
+            from ..skills.router.router import RouterConfig, route_task
             return route_task(task, RouterConfig())
 
         def ok(rt) -> None:
@@ -675,8 +713,8 @@ def launch() -> int:
             return
 
         def work():
-            from .anchor.anchor import anchor_plan, anchoring_accuracy
-            from .anchor.indexer import build_index
+            from ..skills.anchor.anchor import anchor_plan, anchoring_accuracy
+            from ..skills.anchor.indexer import build_index
             index = build_index(repo)
             anchors = anchor_plan(steps, index)
             return len(index), anchors, anchoring_accuracy(anchors)
@@ -719,9 +757,9 @@ def launch() -> int:
 
     def do_ab() -> None:
         def work():
-            from .anchor.indexer import build_index
-            from .eval.ab_runner import run_ab_suite
-            from .eval.datasets import sample_cases
+            from ..skills.anchor.indexer import build_index
+            from ..evaluation.ab_runner import run_ab_suite
+            from ..evaluation.datasets import sample_cases
             index = build_index(str(_PROJECT_ROOT / "src"))
             return run_ab_suite(sample_cases(), index)
 
@@ -864,10 +902,10 @@ def launch() -> int:
 
     def do_dash_run() -> None:
         def work():
-            from .anchor.indexer import build_index
-            from .eval.ab_runner import run_ab_suite
-            from .eval.datasets import sample_cases
-            from .prd.compressor import compress_prd
+            from ..skills.anchor.indexer import build_index
+            from ..evaluation.ab_runner import run_ab_suite
+            from ..evaluation.datasets import sample_cases
+            from ..skills.prd.compressor import compress_prd
             index = build_index(str(_PROJECT_ROOT / "src"))
             summ = run_ab_suite(sample_cases(), index)
             by_name = {c.name: c for c in sample_cases()}
@@ -896,7 +934,7 @@ def launch() -> int:
 
     def do_dash_html() -> None:
         def work():
-            from .eval.dashboard import write_dashboard
+            from ..evaluation.dashboard import write_dashboard
             return write_dashboard(str(_PROJECT_ROOT / "ab_dashboard.html"),
                                    repo=str(_PROJECT_ROOT / "src"))
 
@@ -920,12 +958,15 @@ def launch() -> int:
     def run_optimize() -> None:
         if not state["text"]:
             return
+        # Apply the effective API key (UI field, else .env) on the main thread so a
+        # user-supplied key turns on Claude summarization + exact token counts.
+        config.anthropic_api_key = _effective_api_key()
         summarize = summarize_var.get()
         text = state["text"]
         _run_bg(lambda: _optimize(text, summarize), _done, busy="Optimizing…")
 
     def _optimize(text: str, summarize: bool):
-        from .run_log import log_run
+        from ..core.run_log import log_run
 
         result = TextOptimizer(config).optimize(text, summarize=summarize)
         write_output(result, str(OUTPUT_FILE))
@@ -960,12 +1001,222 @@ def launch() -> int:
             f"saved to: {OUTPUT_FILE.name}{log_note}"
         )
 
+    # ══ Guided Demo (Help → Guided Demo) ════════════════════════════════════════
+    # An automated, video-style walkthrough: it advances on a timer, switches tabs,
+    # runs each feature live, and narrates in an on-top caption box with playback
+    # controls. Everything it drives is already defined above.
+    def _play_demo() -> None:
+        existing = state.get("demo_win")
+        if existing is not None and existing.winfo_exists():
+            existing.lift()
+            return
+
+        sample_prd = (
+            "Executive Summary\n\nThis document restates a lot of background at length. "
+            "As mentioned, it is important and verbose on purpose.\n\n"
+            "Requirements\n"
+            "- The system must automatically retry a failed charge up to 3 times.\n"
+            "- Each retry must be idempotent so a customer is never double-charged.\n"
+            "- Acceptance criteria: Given a transient error, when a charge fails, then "
+            "the system should retry with the same idempotency key.\n\n"
+            "Out of scope\n- We will not change the refund flow.\n"
+        )
+
+        def act_doc():
+            try:
+                sources.select(doc_tab)
+            except Exception:
+                pass
+
+        def act_sources():
+            try:
+                sources.select(jira_tab)
+            except Exception:
+                pass
+
+        def act_compress():
+            skills_state["prd"] = sample_prd
+            prd_path_var.set("(demo sample PRD)")
+            compress_btn.config(state="normal")
+            do_compress()
+
+        def act_route():
+            task_var.set("redesign the auth architecture for concurrency and race conditions")
+            do_route()
+
+        # (tab, title, narration, action-or-None)
+        scenes = [
+            (optimize_tab, "Welcome to TokenOptimizer",
+             "This quick auto-tour walks through every tab and feature. It advances on "
+             "its own — use Prev/Next to step, Pause to hold, or Close to exit. There "
+             "are three tabs: Token Optimizer, Feature-Dev Skills, and Dashboard.", None),
+            (optimize_tab, "Menus — File & Help",
+             "File offers Open Document and Save Optimized As. Help offers this Guided "
+             "Demo, the Documentation (PDF), and About. Everything is also available on "
+             "the command line via the 'tokenopt' command.", None),
+            (optimize_tab, "Tab 1 · Token Optimizer",
+             "Pick a data source and the text is optimized on load — deterministic "
+             "reductions plus an optional summary — shrinking tokens before they ever "
+             "reach the model.", act_doc),
+            (optimize_tab, "Data sources",
+             "Three sources: a Document (.docx / .txt / .md), JIRA (fetch issues by a "
+             "JQL query), or GitHub (a single PR or all open PRs). Blank connection "
+             "fields fall back to your .env values.", act_sources),
+            (optimize_tab, "Optimize & Review",
+             "The Summarize checkbox adds a summary pass. KPI cards show Original / "
+             "Optimized / Saved % / Counted-via, and the panes show Original vs "
+             "Optimized text side by side.", act_doc),
+            (skills_tab, "Tab 2 · Feature-Dev Skills",
+             "Four skill cards in two columns on the left, with a shared result console "
+             "on the right — the token-optimisation skills for feature development.", None),
+            (skills_tab, "Skill 1 · PRD Compression",
+             "Compresses a verbose PRD into dense requirement atoms (~67% fewer tokens), "
+             "keeping acceptance criteria verbatim. Watch the result console on the "
+             "right fill in.", act_compress),
+            (skills_tab, "Skill 2b · Model Router",
+             "Classifies a task by complexity and routes it to the cheapest capable "
+             "model — here a complex task routes to Opus, with the signals shown.", act_route),
+            (skills_tab, "Skill 2a · Codebase Anchoring",
+             "Anchors each plan step to a real file:line reference and flags unresolved "
+             "symbols as possible hallucinations. Press 'Anchor Plan' to try it.", None),
+            (skills_tab, "Validation · A/B Suite",
+             "Runs 8 feature requests across 2 business units, baseline vs optimised. "
+             "The 'Charts' button jumps to the Dashboard tab.", None),
+            (dash_tab, "Tab 3 · Dashboard",
+             "KPI tiles and native charts (cost & quality per case). It auto-runs the "
+             "A/B suite the first time you open it, so the savings and quality appear "
+             "at a glance. 'Open HTML Dashboard' exports an interactive report.", None),
+            (optimize_tab, "That's the tour!",
+             "Reopen anytime from Help → Guided Demo. Full docs are in Help → "
+             "Documentation (PDF), and the CLI mirrors every feature. Happy optimizing!", None),
+        ]
+
+        SCENE_MS, TICK = 7000, 100
+        st = {"i": 0, "paused": False, "after": None, "prog": 0.0}
+
+        dw = tk.Toplevel(root)
+        state["demo_win"] = dw
+        dw.title("Guided Demo — TokenOptimizer")
+        dw.transient(root)
+        dw.attributes("-topmost", True)
+        dw.resizable(False, False)
+        root.update_idletasks()
+        w = min(760, max(560, root.winfo_width() - 80))
+        h = 224
+        x = root.winfo_rootx() + (root.winfo_width() - w) // 2
+        y = root.winfo_rooty() + root.winfo_height() - h - 28
+        # Keep the whole caption (incl. its control row) on-screen on short displays.
+        y = min(y, root.winfo_screenheight() - h - 70)
+        dw.geometry(f"{w}x{h}+{max(x, 20)}+{max(y, 40)}")
+
+        bar = tk.Frame(dw, bg=HEADER_BG)
+        bar.pack(fill="x")
+        counter_var = tk.StringVar(value="")
+        tk.Label(bar, text="●  Guided Demo", bg=HEADER_BG, fg="#6fd19a",
+                 font=FONT_SEMI).pack(side="left", padx=(12, 8), pady=8)
+        tk.Label(bar, textvariable=counter_var, bg=HEADER_BG, fg=HEADER_SUB,
+                 font=FONT_SM).pack(side="left", pady=8)
+
+        body = tk.Frame(dw, bg=SURFACE)
+        body.pack(fill="both", expand=True)
+        title_var = tk.StringVar()
+        text_var = tk.StringVar()
+        tk.Label(body, textvariable=title_var, bg=SURFACE, fg=PRIMARY,
+                 font=("Segoe UI Semibold", 13), anchor="w", justify="left").pack(
+            fill="x", padx=16, pady=(12, 2))
+        tk.Label(body, textvariable=text_var, bg=SURFACE, fg=INK, font=FONT, anchor="nw",
+                 justify="left", wraplength=w - 34).pack(fill="both", expand=True, padx=16)
+
+        pbar = ttk.Progressbar(dw, mode="determinate", maximum=100,
+                               style="Brand.Horizontal.TProgressbar")
+        pbar.pack(fill="x")
+
+        ctl = tk.Frame(dw, bg=SURFACE)
+        ctl.pack(fill="x", pady=(6, 10))
+        pause_var = tk.StringVar(value="⏸  Pause")
+
+        def close():
+            if st["after"]:
+                try:
+                    dw.after_cancel(st["after"])
+                except Exception:
+                    pass
+            state["demo_win"] = None
+            dw.destroy()
+
+        def show(i):
+            if i >= len(scenes):
+                close()
+                return
+            i = max(0, i)
+            st["i"], st["prog"] = i, 0.0
+            pbar["value"] = 0
+            tab, title, text, action = scenes[i]
+            try:
+                main_nb.select(tab)
+                if action:
+                    action()
+            except Exception:
+                pass
+            counter_var.set(f"Step {i + 1} of {len(scenes)}")
+            title_var.set(title)
+            text_var.set(text)
+
+        def tick():
+            if not dw.winfo_exists():
+                return
+            if not st["paused"]:
+                st["prog"] += TICK / SCENE_MS
+                pbar["value"] = min(100, st["prog"] * 100)
+                if st["prog"] >= 1.0:
+                    goto(st["i"] + 1)
+                    return
+            st["after"] = dw.after(TICK, tick)
+
+        def goto(i):
+            if st["after"]:
+                try:
+                    dw.after_cancel(st["after"])
+                except Exception:
+                    pass
+                st["after"] = None
+            show(i)
+            if dw.winfo_exists():
+                st["after"] = dw.after(TICK, tick)
+
+        def toggle_pause():
+            st["paused"] = not st["paused"]
+            pause_var.set("▶  Play" if st["paused"] else "⏸  Pause")
+
+        def _btn(parent, text, cmd, primary=False):
+            return tk.Button(
+                parent, text=text, command=cmd, relief="flat", font=FONT_SM,
+                padx=10, pady=4, cursor="hand2",
+                bg=PRIMARY if primary else "#e4eaf3", fg="#ffffff" if primary else INK,
+                activebackground=PRIMARY_DARK if primary else "#d3ddec",
+                activeforeground="#ffffff" if primary else INK,
+            )
+
+        _btn(ctl, "✕  Close", close).pack(side="right", padx=(6, 12))
+        _btn(ctl, "Next  ▶", lambda: goto(st["i"] + 1), primary=True).pack(side="right", padx=6)
+        tk.Button(ctl, textvariable=pause_var, command=toggle_pause, relief="flat",
+                  font=FONT_SM, padx=10, pady=4, cursor="hand2", bg="#e4eaf3", fg=INK,
+                  activebackground="#d3ddec").pack(side="right", padx=6)
+        _btn(ctl, "◀  Prev", lambda: goto(st["i"] - 1)).pack(side="right", padx=6)
+
+        dw.protocol("WM_DELETE_WINDOW", close)
+        goto(0)
+
     # Optional launch hook: open straight to a given tab (handy for demos/tests).
     _tab = os.environ.get("TOKENOPT_UI_TAB", "").lower()
     if _tab in ("skills", "feature-dev", "2"):
         main_nb.select(skills_tab)
     elif _tab in ("dashboard", "dash", "3"):
         main_nb.select(dash_tab)
+
+    # Optional: auto-start the guided demo (Help → Guided Demo).
+    if os.environ.get("TOKENOPT_UI_DEMO", "").lower() in ("1", "true", "yes"):
+        root.after(500, _play_demo)
 
     root.mainloop()
     return 0

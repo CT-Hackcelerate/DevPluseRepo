@@ -9,9 +9,13 @@ saved. A small desktop **UI** lets you pick a document and view the result.
 > The same engine also drives automations over **JIRA** and DevOps tools
 > (**GitHub, Azure DevOps, GitLab, Jenkins**) — see [Automations](#real-automations) below.
 
-> 📖 **Full feature reference:** [FEATURES.md](FEATURES.md) — every optimization
+> 📖 **Full feature reference:** [FEATURES.md](docs/FEATURES.md) — every optimization
 > strategy, summary tier, token-counting backend, interface, and the per-run logging.
 > Every run writes a detailed log to `logs/`.
+>
+> 🏛️ **Architecture:** [Architectural Design Document (PDF)](docs/Architecture-Design-Document.pdf)
+> — layers, components, runtime flows, and design decisions
+> (regenerate with `python scripts/generate_architecture_pdf.py`).
 
 ## Document optimizer (default use case)
 
@@ -30,14 +34,16 @@ tokenopt optimize-doc --file notes.txt --summarize   # add a summary pass (Haiku
 - **Minimal request**: `build_prompt_request()` assembles the smallest reasonable Messages-API request — cached system prefix + terse task + optimized data under one compact delimiter.
 - **Output**: the optimized text (with a savings header) is written to `optimized_output.txt` in the root/working folder.
 - **Tokens**: counted with the API's `count_tokens` when `ANTHROPIC_API_KEY` is set; otherwise offline via `tiktoken` (real BPE), falling back to a char/word estimate if `tiktoken` isn't installed ([`optimize/tokens.py`](src/token_optimizer/optimize/tokens.py)). The whole pipeline works fully offline.
-- **UI**: [`ui.py`](src/token_optimizer/ui.py) — a dependency-free Tkinter app.
+- **UI**: [`ui/app.py`](src/token_optimizer/ui/app.py) — a dependency-free Tkinter app with three top-level tabs: **Token Optimizer** (document/JIRA/GitHub), **Feature-Dev Skills** (the two skills + A/B validation), and **Dashboard** (native cost/quality charts).
 
 ### Connecting to JIRA and Git in the UI
 
-`tokenopt ui` opens with three source tabs, so you can optimize live data as easily
-as a file:
+The **Token Optimizer** tab opens with three source sub-tabs, so you can optimize
+live data as easily as a file:
 
-- **Document** — pick a `.docx` / `.txt` / `.md`.
+- **Document** — pick a `.docx` / `.txt` / `.md`. Optionally paste an **Anthropic API key**
+  to opt into Claude (Haiku) summarization + exact token counts for a more effective
+  result; blank stays fully offline (a key in `.env` is used automatically).
 - **JIRA** — enter Base URL, Email, API token and a JQL query, then **Connect & Fetch Issues**.
 - **GitHub (Git)** — enter Token, Owner, Repo (and an optional PR number / *Include diff*),
   then **Connect & Fetch**. Leave the PR number blank to pull all open PRs.
@@ -59,7 +65,7 @@ for signal, not noise.
 | 1 | **Local pre-filtering** | [`optimize/prefilter.py`](src/token_optimizer/optimize/prefilter.py) | Rule-based field allowlists drop irrelevant JSON before the LLM sees it. 0 tokens, 0 latency. |
 | 2 | **Context compression** | [`optimize/compress.py`](src/token_optimizer/optimize/compress.py) | Strip log noise, dedupe repeated lines, head/tail-truncate. Great on CI logs & diffs. |
 | 3 | **Smart summarization** | [`optimize/summarize.py`](src/token_optimizer/optimize/summarize.py) | Pre-summarize large inputs with cheap Haiku so Opus reasons over a summary. |
-| 4 | **Prompt caching** | [`llm/client.py`](src/token_optimizer/llm/client.py), [`llm/cache.py`](src/token_optimizer/llm/cache.py) | Claude native prompt cache (stable system prefix, ~0.1x reads) + local exact-match cache (0 tokens). |
+| 4 | **Prompt caching** | [`core/llm/client.py`](src/token_optimizer/core/llm/client.py), [`core/llm/cache.py`](src/token_optimizer/core/llm/cache.py) | Claude native prompt cache (stable system prefix, ~0.1x reads) + local exact-match cache (0 tokens). |
 
 Every run returns an [`OptimizationResult`](src/token_optimizer/optimize/pipeline.py) with
 `raw_tokens`, `optimized_tokens`, `reduction_pct`, and an estimated cost — measured with the
@@ -108,6 +114,36 @@ The PR reviewer compresses the unified diff with a **diff-aware** pass
 and `+/-` lines while collapsing unchanged context — typically the largest single
 token saving on a code-review prompt.
 
+## Feature-development skills & A/B validation
+
+Two skills that optimise AI token usage during feature development, plus an
+offline A/B suite that proves the cost/quality outcome. Full detail in
+[docs/FEATURES.md §5–6](docs/FEATURES.md).
+
+```powershell
+# Skill 1 — compress a verbose PRD into dense requirement atoms (~67% smaller)
+tokenopt compress-prd --file prd.docx
+
+# Skill 2a — anchor plan steps (one per line) to real file:line refs; flags hallucinations
+tokenopt anchor-plan --plan plan.txt --repo src
+
+# Skill 2b — classify a task and route it to the cheapest capable model
+tokenopt route --task "rename a variable and fix a typo"      # -> haiku
+tokenopt route --task "redesign auth for concurrency"          # -> opus
+
+# Validation — 8-case / 2-BU baseline-vs-optimised comparison, and an HTML dashboard
+tokenopt ab-suite --repo src
+tokenopt dashboard --repo src        # writes/opens ab_dashboard.html
+```
+
+- **Skill 1 — PRD compression** ([`skills/prd/compressor.py`](src/token_optimizer/skills/prd/compressor.py)): extracts decision-relevant requirement atoms, keeps acceptance criteria verbatim.
+- **Skill 2a — Codebase anchoring** ([`skills/anchor/`](src/token_optimizer/skills/anchor/)): AST/regex symbol index → `file:line` anchors, flags unresolved (hallucinated) references.
+- **Skill 2b — Model routing** ([`skills/router/`](src/token_optimizer/skills/router/)): complexity classifier + confidence-threshold fallback to premium.
+- **Validation** ([`evaluation/`](src/token_optimizer/evaluation/)): **~73% compression, ~58% cost savings, 24.0/25 quality** across 8 cases / 2 BUs — locked by tests.
+
+The skills are also packaged as invokable Claude Code skills under
+[`.claude/skills/`](.claude/skills/).
+
 ## Library usage
 
 ```python
@@ -126,16 +162,26 @@ print(result.summary())   # raw vs optimized tokens, cache hits, cost
 
 ## Layout
 
+Layered `src/` package — cross-cutting infrastructure in `core/`, the product
+skills in `skills/`, everything else grouped by responsibility.
+
 ```
 src/token_optimizer/
-  config.py              env-driven configuration
-  llm/                   Claude client (caching, count_tokens, adaptive thinking)
-  optimize/              the 4 strategies + pipeline that composes them
-  integrations/          JIRA, GitHub, Azure DevOps, GitLab, Jenkins connectors
-  automations/           ready-made flows (JIRA triage, Jenkins RCA)
-  cli.py                 `tokenopt` command
-tests/                   offline tests for the deterministic strategies
+  cli.py                 `tokenopt` command (all subcommands)
+  core/                  config, per-run logging, Claude client + cache
+  skills/                prd/ (Skill 1), anchor/ (Skill 2a), router/ (Skill 2b)
+  optimize/              the strategies + pipelines that compose them
+  integrations/          JIRA, GitHub, Azure DevOps, GitLab, Jenkins, documents
+  automations/           ready-made flows (JIRA triage, Jenkins RCA, PR review)
+  evaluation/            A/B runner, 25-pt rubric, cost model, dataset, dashboard
+  ui/                    desktop Tkinter app (app.py)
+docs/                    FEATURES.md, plan, documentation PDF
+examples/                sample PRD / document inputs
+tests/                   offline test suites (deterministic, no API key)
 ```
+
+See [docs/FEATURES.md §10](docs/FEATURES.md) for the annotated tree and
+[docs/CHANGELOG.md](docs/CHANGELOG.md) for the full change history.
 
 ## Tests
 

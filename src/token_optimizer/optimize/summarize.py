@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..llm.client import ClaudeClient
+    from ..core.llm.client import ClaudeClient
 
 _SUMMARY_SYSTEM = (
     "You compress technical content for a downstream AI agent, not a human. "

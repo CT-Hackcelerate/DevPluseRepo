@@ -14,13 +14,13 @@ import argparse
 import os
 import sys
 
-from .config import Config
+from .core.config import Config
 
 
 def _cmd_optimize_doc(args: argparse.Namespace) -> int:
     """Optimize a document's text and write the result to a text file."""
     from .optimize.text_pipeline import optimize_document, write_output
-    from .run_log import log_run
+    from .core.run_log import log_run
 
     config = Config()
     out_path = args.out or os.path.join(os.getcwd(), "optimized_output.txt")
@@ -60,7 +60,7 @@ def _cmd_ui(args: argparse.Namespace) -> int:
 
 def _run_and_log(command: str, source: dict, options: dict, work) -> int:
     """Run a triage/review ``work`` callable, print its result, and log the run."""
-    from .run_log import log_run
+    from .core.run_log import log_run
 
     config = Config()
     try:
@@ -132,7 +132,7 @@ def _cmd_triage_github_prs(args: argparse.Namespace) -> int:
 def _cmd_compress_prd(args: argparse.Namespace) -> int:
     """Skill 1 — compress a verbose PRD into dense requirement atoms."""
     from .integrations.document import read_document
-    from .prd.compressor import compress_prd
+    from .skills.prd.compressor import compress_prd
 
     text = read_document(args.file)
     result = compress_prd(text)
@@ -149,8 +149,8 @@ def _cmd_compress_prd(args: argparse.Namespace) -> int:
 
 def _cmd_anchor_plan(args: argparse.Namespace) -> int:
     """Skill 2a — anchor plan steps to real file:line references in a repo."""
-    from .anchor.anchor import anchor_plan, anchoring_accuracy
-    from .anchor.indexer import build_index
+    from .skills.anchor.anchor import anchor_plan, anchoring_accuracy
+    from .skills.anchor.indexer import build_index
 
     with open(args.plan, "r", encoding="utf-8") as fh:
         steps = [ln.strip() for ln in fh if ln.strip()]
@@ -174,7 +174,7 @@ def _cmd_anchor_plan(args: argparse.Namespace) -> int:
 
 def _cmd_route(args: argparse.Namespace) -> int:
     """Skill 2b — classify a task's complexity and route it to a model."""
-    from .router.router import RouterConfig, route_task
+    from .skills.router.router import RouterConfig, route_task
 
     route = route_task(args.task, RouterConfig())
     print(route.render())
@@ -190,9 +190,9 @@ def _cmd_route(args: argparse.Namespace) -> int:
 
 def _cmd_ab_suite(args: argparse.Namespace) -> int:
     """Eval — run the 8-case, 2-BU A/B suite (baseline vs optimised)."""
-    from .anchor.indexer import build_index
-    from .eval.ab_runner import run_ab_suite
-    from .eval.datasets import sample_cases
+    from .skills.anchor.indexer import build_index
+    from .evaluation.ab_runner import run_ab_suite
+    from .evaluation.datasets import sample_cases
 
     index = build_index(args.repo)
     summary = run_ab_suite(sample_cases(), index)
@@ -206,7 +206,7 @@ def _cmd_ab_suite(args: argparse.Namespace) -> int:
 
 def _cmd_dashboard(args: argparse.Namespace) -> int:
     """Eval — render the A/B results to a self-contained HTML dashboard."""
-    from .eval.dashboard import write_dashboard
+    from .evaluation.dashboard import write_dashboard
 
     out_path = args.out or os.path.join(os.getcwd(), "ab_dashboard.html")
     write_dashboard(out_path, repo=args.repo)

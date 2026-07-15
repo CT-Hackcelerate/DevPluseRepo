@@ -1,6 +1,6 @@
 """Token-optimized Claude automation. Document text is the default input source."""
 
-from .config import Config
+from .core.config import Config
 from .optimize.pipeline import OptimizedRunner, OptimizationResult
 from .optimize.text_pipeline import (
     TextOptimizer,
