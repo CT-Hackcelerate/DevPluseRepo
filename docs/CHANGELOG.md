@@ -48,7 +48,7 @@ against the data-viz colour checks.
   update live; blank falls back to the `.env` key or fully offline.
 
 **Regression tests** locking the headline claims
-(`tests/test_hackathon.py`): every PRD compresses ≥ 67%, and the A/B suite meets
+(`tests/test_hackcelerate.py`): every PRD compresses ≥ 67%, and the A/B suite meets
 ≥ 35% savings at ≥ 23/25 quality.
 
 **Documentation** — `docs/FEATURES.md` rewritten (skills, validation, UI tabs,
@@ -56,7 +56,10 @@ project layout); `README.md` gains a skills/validation section and updated layou
 this changelog. **Architectural Design Document** at
 `docs/Architecture-Design-Document.pdf` (generator:
 `scripts/generate_architecture_pdf.py`) — layers, components, runtime flows,
-cross-cutting concerns, and design-decision rationale.
+cross-cutting concerns, and design-decision rationale. **Hackcelerate pitch deck**
+at `docs/TokenOptimizer-Hackcelerate.pptx` (generator:
+`scripts/generate_hackcelerate_ppt.py`) — 12 slides with a live A/B chart and the
+embedded dashboard.
 
 ### Changed
 
@@ -75,7 +78,7 @@ matching the claim. Requirement atoms are unchanged, so quality is unaffected.
 | `prd/`, `anchor/`, `router/` | `skills/prd/`, `skills/anchor/`, `skills/router/` |
 | `eval/` | `evaluation/` |
 | `ui.py` | `ui/app.py` (+ `ui/__init__.py`, `ui/__main__.py`) |
-| `FEATURES.md`, `Hackathon-*.md`, `documents/*.pdf` | `docs/` |
+| `FEATURES.md`, `Hackcelerate-*.md`, `documents/*.pdf` | `docs/` |
 | `Jira issue sample.txt`, `sample_document.docx` | `examples/` (kebab-case) |
 
 **UI skill descriptions** — rewritten to crisp one-liners; the desktop window now

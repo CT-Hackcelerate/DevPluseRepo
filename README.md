@@ -16,6 +16,10 @@ saved. A small desktop **UI** lets you pick a document and view the result.
 > 🏛️ **Architecture:** [Architectural Design Document (PDF)](docs/Architecture-Design-Document.pdf)
 > — layers, components, runtime flows, and design decisions
 > (regenerate with `python scripts/generate_architecture_pdf.py`).
+>
+> 📊 **Pitch:** [Hackcelerate deck (PPTX)](docs/TokenOptimizer-Hackcelerate.pptx)
+> — 12 slides with a live A/B chart (regenerate with
+> `python scripts/generate_hackcelerate_ppt.py`).
 
 ## Document optimizer (default use case)
 

@@ -2,7 +2,7 @@
 
 Runs the 8-case / 2-BU A/B suite and renders a single static HTML file with
 inline-SVG charts — no plotting library, no server, no network. Open the file in
-any browser for the before/after story the hackathon demo needs:
+any browser for the before/after story the demo needs:
 
   * KPI tiles (hero = cost savings) — the headline numbers.
   * Cost per case: baseline vs optimised (grouped columns).
