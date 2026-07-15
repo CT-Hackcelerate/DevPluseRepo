@@ -1,0 +1,115 @@
+@startuml 01-system-overview
+' TokenOptimizer — detailed layered architecture.
+' Interfaces -> Config -> Sources -> Optimize strategies -> Core/LLM -> Outputs.
+title TokenOptimizer — Architecture (layered components)
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultTextAlignment center
+skinparam nodesep 12
+skinparam ranksep 26
+skinparam rectangle {
+  BackgroundColor #FDFDFD
+  BorderColor #6B6B6B
+  roundCorner 8
+}
+skinparam package {
+  BackgroundColor #F4F7FB
+  BorderColor #35506E
+  FontStyle bold
+}
+skinparam ArrowColor #35506E
+
+actor "User" as user
+actor "Ops / CI\n(scheduled)" as ops
+
+package "Interfaces (entry points)" as L0 {
+  rectangle "Desktop UI (ui/app.py)\nTabs: Token Optimizer | Feature-Dev Skills | Dashboard" as ui
+  rectangle "CLI  tokenopt (cli.py)\noptimize-doc · triage-jira · triage-jenkins\nreview-github-pr · triage-github-prs · route\ncompress-prd · anchor-plan · ab-suite · dashboard · demo" as cli
+  rectangle "Library\nOptimizedRunner / TextOptimizer" as lib
+}
+
+package "Configuration" as LC {
+  rectangle "Config (core/config.py)\nloaded from env / .env\nmodels, cache_dir, log_dir\nJIRA · GitHub · AzDO · GitLab · Jenkins creds" as config
+  rectangle "build_config(**overrides)\nUI form fields override env" as bc
+}
+
+package "Sources / Integrations (integrations/*)" as L1 {
+  rectangle "read_document()\n.docx (python-docx) / .txt / .md" as doc
+  rectangle "JiraConnector.search(jql)" as jira
+  rectangle "GitHubConnector\nget_pr · get_pr_diff\nlist_open_prs · comment_on_issue" as gh
+  rectangle "JenkinsConnector\nget_build · get_console_log" as jenkins
+  rectangle "Azure DevOps · GitLab\nconnectors" as other
+  rectangle "sources.py\nfetch_jira_text / fetch_github_text\n(remote -> plain text)" as srcs
+}
+
+package "Optimize strategies (optimize/*)" as L2 {
+  rectangle "local.reduce_text()  [offline]\nunicode fold · boilerplate strip\npunctuation/filler collapse · para dedup" as local
+  rectangle "1. prefilter_fields(profile)\nallowlists: jira_issue · github_pr\njenkins_build · azdo · gitlab" as prefilter
+  rectangle "2. compress_text / compress_prose / compress_diff\nstrip_noise · dedupe_lines · head_tail_truncate" as compress
+  rectangle "3. summarize\nHaiku  ->  local Ollama  ->  extractive\n(tokens.count_tokens_offline: tiktoken/estimate)" as summarize
+  rectangle "pipelines\nOptimizedRunner (items) · TextOptimizer (docs)\nbuild_prompt_request()" as pipe
+}
+
+package "Core / LLM (core/llm/*)" as L3 {
+  rectangle "ClaudeClient (client.py)\ncomplete() · count_tokens()\nadaptive thinking + effort · streaming" as client
+  rectangle "Native prompt cache\ncache_control=ephemeral on system prefix\n~0.1x reads" as pcache
+  rectangle "ResponseCache (cache.py)\nsha256(request) -> disk\nexact-match, 0 tokens, TTL 24h" as rcache
+  rectangle "Usage + _PRICING\nper-tier token tally -> estimate_cost()" as usage
+}
+
+cloud "Anthropic Messages API\nOpus 4.8 (reason) · Haiku 4.5 (summary)" as api
+node "Ollama (optional, local)\nabstractive summary, 0 cloud tokens" as ollama
+
+package "Outputs & Observability" as L4 {
+  rectangle "optimized_output.txt\n(stats header + text)" as outtxt
+  rectangle "OptimizationResult / TextOptimizationResult\nraw vs optimized tokens · %saved · cost · stages" as result
+  rectangle "run_log.log_run()\nlogs/<run_id>_<cmd>.log\nhuman report + JSON, secrets redacted" as logs
+  rectangle "A/B dashboard\nab_dashboard.html" as dash
+}
+
+user --> ui
+user --> cli
+ops --> cli
+lib ..> pipe
+
+ui ..> bc
+bc --> config
+cli ..> config
+lib ..> config
+
+ui --> doc
+ui --> srcs
+cli --> doc
+cli --> jira
+cli --> gh
+cli --> jenkins
+lib --> other
+srcs --> jira
+srcs --> gh
+config ..> L1 : credentials
+
+doc --> local
+jira --> prefilter
+gh --> prefilter
+jenkins --> compress
+other --> prefilter
+local --> compress
+prefilter --> compress
+compress --> summarize
+summarize --> pipe
+
+pipe --> client
+client --> pcache
+client --> rcache
+client --> usage
+client --> api
+summarize ..> ollama : no key
+
+client --> result
+local --> outtxt
+result --> outtxt
+result --> logs
+result --> dash
+
+@enduml

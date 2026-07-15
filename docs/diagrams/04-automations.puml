@@ -1,0 +1,63 @@
+@startuml 04-automations
+' Ready-made automation flows over JIRA / Jenkins / GitHub
+' (automations/triage.py, automations/github.py) and how each feeds the runner.
+title Flow — Automations  (connector -> compress -> optimized call -> log)
+
+skinparam shadowing false
+skinparam activity {
+  BackgroundColor #FDFDFD
+  BorderColor #35506E
+  DiamondBackgroundColor #FFF4D6
+  DiamondBorderColor #B8860B
+  ArrowColor #35506E
+}
+
+|#F4F7FB|triage-jira|
+start
+:JiraConnector.search(jql, max_results);
+:system = _TRIAGE_SYSTEM\ntask = "Triage N JIRA issues";
+:profile=jira_issue · summarize=True;
+detach
+
+|#F4F7FB|triage-jenkins|
+start
+:JenkinsConnector\nget_build + get_console_log;
+:compress_text(log, max=8000, keep_errors=True)\nconsole logs are the worst offenders;
+:build["console_log"] = compressed;
+:system = _RCA_SYSTEM\nprofile=jenkins_build · summarize=True · max_tokens=2048;
+detach
+
+|#F4F7FB|review-github-pr|
+start
+:GitHubConnector\nget_pr + get_pr_diff;
+:compress_diff(diff, max=16000)\nkeep hunk/file headers + -/+ lines,\ncollapse unchanged context to markers;
+:pr["diff"] = compressed;
+:system = _REVIEW_SYSTEM\nprofile=github_pr · summarize=False · max_tokens=3072;
+detach
+
+|#F4F7FB|triage-github-prs|
+start
+:GitHubConnector.list_open_prs(per_page);
+if (include_diffs?) then (yes)
+  :compress_diff(diff, max=6000) per PR;
+  :summarize=True;
+else (no)
+  :metadata only (cheap);
+  :summarize=False;
+endif
+:system = _PR_TRIAGE_SYSTEM\nprofile=github_pr · max_tokens=2048;
+detach
+
+|#EAF3EA|OptimizedRunner.run (shared)|
+start
+:prefilter_fields -> compress -> (summarize)\n-> count raw & optimized tokens\n-> ClaudeClient.complete (prompt cache + local cache);
+:OptimizationResult\nanswer · tokens saved · usage · est. cost;
+if (review-github-pr AND --post-comment?) then (yes)
+  :GitHubConnector.comment_on_issue\npost review back to the PR thread;
+else (no)
+endif
+:log_run() -> logs/<run_id>_<command>.log\n(metrics + config snapshot, secrets redacted);
+:print answer + summary to stdout/stderr;
+stop
+
+@enduml

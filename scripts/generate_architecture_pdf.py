@@ -20,8 +20,10 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
+from reportlab.lib.utils import ImageReader
 from reportlab.platypus import (
     HRFlowable,
+    Image,
     ListFlowable,
     ListItem,
     PageBreak,
@@ -35,6 +37,8 @@ from reportlab.platypus import (
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUT = PROJECT_ROOT / "docs" / "Architecture-Design-Document.pdf"
+# Rendered PlantUML flow diagrams (docs/diagrams/*.puml -> png/*.png).
+DIAGRAM_DIR = PROJECT_ROOT / "docs" / "diagrams" / "png"
 
 INK = colors.HexColor("#1a2233")
 ACCENT = colors.HexColor("#0a5cff")
@@ -74,6 +78,9 @@ def _styles() -> dict:
                                   borderWidth=0.5, borderColor=BORDER),
         "toc": ParagraphStyle("Toc", parent=base["Normal"], fontSize=10.5,
                               textColor=INK, leading=18),
+        "caption": ParagraphStyle("Caption", parent=base["Normal"], fontSize=8.5,
+                                  textColor=MUTED, alignment=TA_CENTER, leading=12,
+                                  spaceBefore=3, spaceAfter=10, fontName="Helvetica-Oblique"),
     }
 
 
@@ -99,6 +106,21 @@ def build_story(S: dict, meta: dict) -> list:
 
     def diagram(text):
         story.append(XPreformatted(text, S["diagram"]))
+
+    def figure(filename, caption, max_w_cm=16.6, max_h_cm=21.0):
+        """Embed a rendered PlantUML diagram, scaled to fit the content box."""
+        path = DIAGRAM_DIR / filename
+        if not path.exists():
+            story.append(P(f"[diagram not found: {filename} — run the PlantUML "
+                           "render step in docs/diagrams]", "caption"))
+            return
+        iw, ih = ImageReader(str(path)).getSize()
+        scale = min((max_w_cm * cm) / iw, (max_h_cm * cm) / ih)
+        img = Image(str(path), width=iw * scale, height=ih * scale)
+        img.hAlign = "CENTER"
+        story.append(Spacer(1, 4))
+        story.append(img)
+        story.append(Paragraph(caption, S["caption"]))
 
     def table(headers, rows, col_widths):
         data = [[Paragraph(h, S["cellhdr"]) for h in headers]]
@@ -176,6 +198,10 @@ def build_story(S: dict, meta: dict) -> list:
          "The guiding principle is <b>offline-first</b>: the deterministic strategies and "
          "both skills run with no API key; a Claude key or a local model only improves "
          "quality, and is never required.")
+    para("The architecture and flow figures in this document are generated from the "
+         "PlantUML sources under <font face='Courier'>docs/diagrams/*.puml</font> "
+         "(scalable SVG versions live alongside the PNGs used here), so they stay in "
+         "lock-step with the code they describe.")
 
     # ── 2. Goals & constraints ─────────────────────────────────────────
     heading("2. Architectural Goals &amp; Constraints")
@@ -243,6 +269,13 @@ def build_story(S: dict, meta: dict) -> list:
         "<b>Skills / Workflows / Evaluation</b> — feature-dev skills, ready-made automations, and the A/B harness.",
         "<b>Interfaces</b> — CLI, desktop UI, and packaged Claude Code skills.",
     ])
+    para("Figure 1 expands this into a component view: how the interfaces resolve "
+         "configuration, fan out to the source connectors, feed the ordered optimize "
+         "strategies, and converge on the Claude client and its two caching layers "
+         "before results, logs, and dashboards are emitted.")
+    figure("01-system-overview.png",
+           "Figure 1 — Layered component architecture (interfaces -> config -> sources "
+           "-> optimize -> core/LLM -> outputs).")
 
     # ── 5. Component responsibilities ──────────────────────────────────
     heading("5. Component Responsibilities")
@@ -261,6 +294,32 @@ def build_story(S: dict, meta: dict) -> list:
         ["cli.py", "The tokenopt command exposing every capability."],
     ], [4.4 * cm, 11.6 * cm])
 
+    story.append(P("<b>5.1 Optimize strategies in detail</b>", "h2"))
+    para("The four stacked strategies run in a fixed order so each stage feeds clean "
+         "input to the next. Structured payloads (JIRA/PR/build items) enter through "
+         "pre-filtering; free-form documents enter through the deterministic reductions.")
+    table(["Strategy / function", "Detail"], [
+        ["1. prefilter_fields(profile)",
+         "Field allowlists per profile drop everything irrelevant before serialization "
+         "(0 tokens). Profiles: jira_issue, github_pr, jenkins_build, azdo_workitem, "
+         "gitlab_issue. Nested user/status objects are collapsed to their display value."],
+        ["2a. compress_text",
+         "Log/JSON path: strip_noise (INFO/DEBUG, deep stack frames, ANSI, timestamps; "
+         "error/warn lines always kept) -> dedupe_lines (repeat counts) -> head_tail_truncate."],
+        ["2b. compress_prose",
+         "Document path: collapse whitespace/blank runs, dedupe verbatim lines, truncate. "
+         "Runs before summarization so duplicates can't dominate the summary."],
+        ["2c. compress_diff",
+         "Review path: keep file/hunk headers and +/- lines; collapse unchanged context "
+         "to '... N unchanged lines ...' markers. Largest single saving on a PR review."],
+        ["3. summary tier",
+         "Best-available first: Claude Haiku (API key) -> local Ollama model (no cloud "
+         "tokens) -> entity-anchored extractive (never drops error codes, versions, IDs, paths)."],
+        ["tokens.count_tokens",
+         "API count_tokens when a key is set; else tiktoken cl100k; else a char/word "
+         "heuristic. The chosen method is recorded in the result and the run log."],
+    ], [4.6 * cm, 11.4 * cm])
+
     # ── 6. Feature-dev skills ──────────────────────────────────────────
     heading("6. Feature-Development Skills")
     story.append(P("<b>Skill 1 — PRD Compression</b> (skills/prd_compression)", "h2"))
@@ -278,32 +337,74 @@ def build_story(S: dict, meta: dict) -> list:
          "then routes to haiku / sonnet / opus respectively. A confidence-threshold "
          "fallback upgrades one tier toward premium when the classifier is unsure, so a "
          "cheap model is never chosen on a coin-flip.")
+    figure("05-skills.png",
+           "Figure 2 — Feature-development skill flows: PRD compression (category-priority, "
+           "acceptance criteria verbatim), codebase anchoring (file:line resolve, "
+           "hallucination flags), and confidence-based model routing.")
 
     # ── 7. Runtime flows ───────────────────────────────────────────────
     heading("7. Key Runtime Flows")
-    story.append(P("<b>7.1 Document / structured optimize flow</b>", "h2"))
-    diagram(
-        "raw text -> deterministic reductions -> summarization (optional tier)\n"
-        "         -> whitespace/dedupe compress -> optimized text + token report -> log"
-    )
-    story.append(P("<b>7.2 Feature-development flow (the two skills + validation)</b>", "h2"))
-    diagram(
-        "PRD/spec --> compress_prd --> requirement atoms --> plan_fn(LLM) --> plan steps\n"
-        "                                                          |\n"
-        "   build_index(repo) ------> anchor_plan --------------->  + file:line anchors\n"
-        "                                                          |\n"
-        "   route_task(task) -------> model tier ---------------->  cheapest capable model\n"
-        "                                                          |\n"
-        "   score_quality + estimate_cost --> A/B metrics --> dashboard (HTML / native)"
-    )
+    para("Every command shares one spine — acquire, optimize, measure, "
+         "cache-or-call, report — and specializes only the acquire and prompt steps. "
+         "The following figures trace that spine and the three concrete pipelines built "
+         "on it.")
+
+    story.append(P("<b>7.1 End-to-end data flow (the shared spine)</b>", "h2"))
+    para("The interface resolves a <font face='Courier'>Config</font> (env / .env, with "
+         "UI form overrides), acquires text from a document or a connector, runs the "
+         "ordered optimize strategies, counts raw and optimized tokens, then either "
+         "returns a local-cache hit (0 tokens) or calls the API with the stable system "
+         "prefix marked for native prompt caching. Results, logs, and optional artifacts "
+         "(PR comment, dashboard) are emitted last.")
+    figure("07-end-to-end-dataflow.png",
+           "Figure 3 — The shared spine every command runs through, shown as swimlanes "
+           "over the owning layer.")
+
+    story.append(P("<b>7.2 Document optimization (TextOptimizer.optimize)</b>", "h2"))
+    para("Free-form document text runs the deterministic reductions (unicode fold, "
+         "boilerplate strip, punctuation/filler collapse, paragraph dedup), then a "
+         "whitespace/dedupe compression pass, then an optional summary whose tier is "
+         "chosen by what is available. Token counting falls back API -> tiktoken -> "
+         "heuristic, and the chosen method, stages, and summary tier are all reported.")
+    figure("02-document-optimize.png",
+           "Figure 4 — Document optimization flow, including the token-method and "
+           "summary-tier decision points.")
+
+    story.append(P("<b>7.3 Structured runner + caching (OptimizedRunner.run)</b>", "h2"))
+    para("Structured items are pre-filtered by profile, compressed, and optionally "
+         "summarized, then joined into a single user turn. The system prefix is sent as "
+         "an ephemeral cacheable block; an exact-match on-disk cache short-circuits "
+         "identical requests for 0 tokens, and usage is tallied per cache tier to "
+         "estimate cost against per-model list prices.")
+    figure("03-optimized-runner.png",
+           "Figure 5 — Structured item pipeline and the two caching layers "
+           "(local exact-match response cache + native prompt cache).")
+
+    story.append(P("<b>7.4 Automations (JIRA / Jenkins / GitHub)</b>", "h2"))
+    para("Each automation acquires from its connector, applies the compression best "
+         "suited to its payload (aggressive log compression for Jenkins, diff-aware "
+         "compression for GitHub), then defers to the shared runner. The GitHub reviewer "
+         "can post its review back to the PR thread; every run is logged.")
+    figure("04-automations.png",
+           "Figure 6 — Automation flows converging on the shared OptimizedRunner, with "
+           "per-command system prompts, profiles, and settings.")
 
     # ── 8. Cross-cutting ───────────────────────────────────────────────
     heading("8. Cross-Cutting Concerns")
     table(["Concern", "Approach"], [
-        ["Configuration", "core/config.py reads env / .env; blanks fall back to defaults."],
-        ["Logging", "core/run_log.py writes a per-run report + JSON; never raises; secrets as booleans."],
-        ["Caching", "core/llm/cache.py disk cache for identical calls; Claude native prompt cache for stable prefixes."],
-        ["Token counting", "optimize/tokens.py: API count_tokens -> tiktoken -> heuristic."],
+        ["Configuration", "core/config.py reads env / .env; blanks fall back to defaults. "
+         "build_config() lets UI form fields override env per run."],
+        ["Logging", "core/run_log.py writes a per-run report + JSON block; never raises "
+         "(returns '' on failure); API keys/tokens recorded only as booleans."],
+        ["Caching (local)", "core/llm/cache.py hashes the full request (sha256, sorted keys) "
+         "to an on-disk JSON entry with a 24h TTL; identical calls return for 0 tokens."],
+        ["Caching (native)", "The stable system prefix is sent as a cache_control=ephemeral "
+         "block so Claude bills reused prefixes at ~0.1x; volatile content stays in the user turn."],
+        ["Cost accounting", "Usage tallies input/output/cache-read/cache-creation tokens; "
+         "estimate_cost applies per-tier list prices (reads 0.1x, writes 1.25x)."],
+        ["Token counting", "optimize/tokens.py: API count_tokens -> tiktoken cl100k -> heuristic."],
+        ["Generation control", "Adaptive thinking + effort (only for models that accept it); "
+         "streaming when max_tokens is large; stop_reason=refusal handled explicitly."],
         ["Error handling", "Graceful degradation at every optional boundary; nothing hard-fails offline."],
         ["Security", "No secrets in logs or output; credentials only via env / .env."],
     ], [4 * cm, 12 * cm])
@@ -323,6 +424,10 @@ def build_story(S: dict, meta: dict) -> list:
     ])
     para("<b>Validated, test-locked outcome:</b> ~73% average PRD compression, ~58% "
          "average cost savings, 24.0/25 average optimised quality (baseline 19.5).")
+    figure("06-ab-validation.png",
+           "Figure 7 — A/B validation flow: baseline (raw PRD, premium model, no "
+           "anchoring) vs optimised (compressed, routed, anchored), scored on the "
+           "25-point rubric and aggregated into the dashboard.")
 
     # ── 10. Deployment & runtime ───────────────────────────────────────
     heading("10. Deployment &amp; Runtime View")

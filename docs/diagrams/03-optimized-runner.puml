@@ -1,0 +1,77 @@
+@startuml 03-optimized-runner
+' Structured-item pipeline + Claude call with both caching layers
+' (optimize/pipeline.py, optimize/prefilter.py, optimize/compress.py,
+'  optimize/summarize.py, core/llm/client.py, core/llm/cache.py).
+title Flow — Optimized Runner  (items -> one cached Claude call)
+
+skinparam shadowing false
+skinparam sequence {
+  ArrowColor #35506E
+  LifeLineBorderColor #6B6B6B
+  ParticipantBorderColor #35506E
+  ParticipantBackgroundColor #F4F7FB
+  GroupBackgroundColor #EAF0F6
+  GroupBorderColor #35506E
+}
+autonumber "0."
+
+actor Caller
+participant "OptimizedRunner\n(pipeline.py)" as runner
+participant "prefilter_fields\ncompress_text\nsummarize_if_large" as opt
+participant "ClaudeClient\n(client.py)" as client
+database "ResponseCache\n(cache.py)" as rcache
+participant "Anthropic API\n+ native prompt cache" as api
+
+Caller -> runner : run(system, task, items, profile,\n            summarize, max_tokens, effort)
+
+group Baseline measurement (what raw would cost)
+  runner -> client : count_tokens(system + task + RAW json(items))
+  client -> api : messages.count_tokens
+  api --> client : input_tokens
+  client --> runner : raw_tokens
+end
+
+group Per-item optimization  (loop over items)
+  runner -> opt : prefilter_fields(item, profile)
+  note right of opt: keep allowlisted fields only\n(jira_issue / github_pr / jenkins_build ...)\ncollapse nested user/status objects
+  runner -> opt : compress_text(rendered, max_chars=12000)
+  note right of opt: strip_noise -> dedupe_lines ->\nhead_tail_truncate
+  alt summarize == True
+    runner -> opt : summarize_if_large(...)
+    opt -> client : Haiku summary (only if still large)
+    client -> api : messages.create
+    api --> client : summary
+    client --> opt : summary
+  end
+  opt --> runner : optimized item text
+end
+
+runner -> runner : join items with "---" delimiter\nuser = task + "DATA:" + optimized_blob
+runner -> client : count_tokens(system + optimized user)
+client --> runner : optimized_tokens
+
+group Generation with caching layers
+  runner -> client : complete(system, user, max_tokens, effort)
+  note over client: system -> cacheable block\ncache_control=ephemeral (native prompt cache)\nadaptive thinking + effort (if model supports)
+  client -> rcache : get(sha256(request))
+  alt local exact-match hit
+    rcache --> client : cached text
+    note right of rcache: 0 tokens · usage.local_cache_hits++
+  else miss
+    alt max_tokens > 16000
+      client -> api : messages.stream(...)
+    else
+      client -> api : messages.create(...)
+    end
+    api --> client : text + usage\n(input / output / cache_read / cache_creation)
+    client -> client : usage.add(); handle stop_reason=refusal
+    client -> rcache : set(request -> text)
+  end
+  client --> runner : answer
+end
+
+runner -> client : estimate_cost()  (_PRICING per tier;\n cache reads 0.1x, writes 1.25x)
+client --> runner : est_cost_usd
+runner --> Caller : OptimizationResult\nraw vs optimized tokens · reduction_pct\nusage (cache hits/reads) · estimated_cost_usd
+
+@enduml
