@@ -23,5 +23,12 @@ tokenopt = "token_optimizer.cli:main"
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
+# Two source roots: the core package under src/, and the independently-maintained
+# skill plugins under skills/ (each a self-contained package with code + SKILL.md
+# + tests). Both are importable after `pip install -e .`.
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["src", "skills"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "skills"]
+addopts = "--import-mode=importlib"

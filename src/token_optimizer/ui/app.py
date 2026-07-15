@@ -695,7 +695,7 @@ def launch() -> int:
             return
 
         def work():
-            from ..skills.prd.compressor import compress_prd
+            from prd_compression.compressor import compress_prd
             return compress_prd(text)
 
         def ok(r) -> None:
@@ -733,7 +733,7 @@ def launch() -> int:
             return
 
         def work():
-            from ..skills.router.router import RouterConfig, route_task
+            from model_routing.router import RouterConfig, route_task
             return route_task(task, RouterConfig())
 
         def ok(rt) -> None:
@@ -783,8 +783,8 @@ def launch() -> int:
             return
 
         def work():
-            from ..skills.anchor.anchor import anchor_plan, anchoring_accuracy
-            from ..skills.anchor.indexer import build_index
+            from codebase_anchoring.anchor import anchor_plan, anchoring_accuracy
+            from codebase_anchoring.indexer import build_index
             index = build_index(repo)
             anchors = anchor_plan(steps, index)
             return len(index), anchors, anchoring_accuracy(anchors)
@@ -827,7 +827,7 @@ def launch() -> int:
 
     def do_ab() -> None:
         def work():
-            from ..skills.anchor.indexer import build_index
+            from codebase_anchoring.indexer import build_index
             from ..evaluation.ab_runner import run_ab_suite
             from ..evaluation.datasets import sample_cases
             index = build_index(str(_PROJECT_ROOT / "src"))
@@ -972,10 +972,10 @@ def launch() -> int:
 
     def do_dash_run() -> None:
         def work():
-            from ..skills.anchor.indexer import build_index
+            from codebase_anchoring.indexer import build_index
             from ..evaluation.ab_runner import run_ab_suite
             from ..evaluation.datasets import sample_cases
-            from ..skills.prd.compressor import compress_prd
+            from prd_compression.compressor import compress_prd
             index = build_index(str(_PROJECT_ROOT / "src"))
             summ = run_ab_suite(sample_cases(), index)
             by_name = {c.name: c for c in sample_cases()}
@@ -1323,6 +1323,23 @@ def launch() -> int:
         main_nb.select(skills_tab)
     elif _tab in ("dashboard", "dash", "3"):
         main_nb.select(dash_tab)
+
+    # Optional: pre-select a source sub-tab (demos/tests/screenshots).
+    _src = os.environ.get("TOKENOPT_UI_SOURCE", "").lower()
+    if _src == "jira":
+        sources.select(jira_tab)
+    elif _src in ("github", "git"):
+        sources.select(gh_tab)
+    elif _src == "document":
+        sources.select(doc_tab)
+
+    # Optional: auto-load + optimize a document on launch (demos/tests/screenshots).
+    _doc = os.environ.get("TOKENOPT_UI_DEMO_DOC", "")
+    if _doc and os.path.exists(_doc):
+        try:
+            load_source(read_document(_doc), f"Document: {os.path.basename(_doc)}")
+        except Exception:
+            pass
 
     # Optional: auto-start the guided demo (Help → Guided Demo).
     if os.environ.get("TOKENOPT_UI_DEMO", "").lower() in ("1", "true", "yes"):

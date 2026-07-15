@@ -24,13 +24,13 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from ...optimize.local import (
+from token_optimizer.optimize.local import (
     collapse_punctuation,
     normalize_unicode,
     strip_boilerplate,
     substitute_fillers,
 )
-from ...optimize.tokens import count_tokens_offline
+from token_optimizer.optimize.tokens import count_tokens_offline
 
 # ── requirement categories & their trigger cues ─────────────────────────────
 

@@ -28,6 +28,7 @@ from pptx.util import Emu, Inches, Pt
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUT = PROJECT_ROOT / "docs" / "TokenOptimizer-Hackcelerate.pptx"
 DASH_IMG = PROJECT_ROOT / "docs" / "assets" / "hackcelerate-dashboard.png"
+DEMO_THUMB = PROJECT_ROOT / "docs" / "assets" / "video" / "app_optimized.png"
 
 
 def rgb(v: int) -> RGBColor:
@@ -62,10 +63,11 @@ def _collect():
     }
     try:
         sys.path.insert(0, str(PROJECT_ROOT / "src"))
+        sys.path.insert(0, str(PROJECT_ROOT / "skills"))
         from token_optimizer.evaluation.ab_runner import run_ab_suite
         from token_optimizer.evaluation.datasets import sample_cases
-        from token_optimizer.skills.anchor.indexer import build_index
-        from token_optimizer.skills.prd.compressor import compress_prd
+        from codebase_anchoring.indexer import build_index
+        from prd_compression.compressor import compress_prd
 
         idx = build_index(str(PROJECT_ROOT / "src"))
         s = run_ab_suite(sample_cases(), idx)
@@ -330,9 +332,9 @@ def build(prs, D):
         {"text": "Guided demo", "size": 17, "bold": True, "color": NAVY, "space_after": 4},
         {"text": "Help → Guided Demo: an automated tour that runs each feature live.",
          "size": 13, "color": INK, "space_after": 12},
-        {"text": "Packaged skills", "size": 17, "bold": True, "color": NAVY, "space_after": 4},
-        {"text": "Invokable Claude Code skills under .claude/skills/.",
-         "size": 13, "color": INK},
+        {"text": "Skill plugins", "size": 17, "bold": True, "color": NAVY, "space_after": 4},
+        {"text": "Self-contained, independently-maintained packages under skills/ "
+                 "(code + SKILL.md + tests).", "size": 13, "color": INK},
     ])
     if DASH_IMG.exists():
         s.shapes.add_picture(str(DASH_IMG), Inches(5.4), Inches(1.6), width=Inches(7.4))
@@ -341,7 +343,42 @@ def build(prs, D):
                 "align": PP_ALIGN.CENTER}], align=PP_ALIGN.CENTER)
     _footer(s, 9)
 
-    # 10 ── Architecture ─────────────────────────────────────────────────────
+    # 10 ── Demo video ───────────────────────────────────────────────────────
+    s = _blank(prs)
+    _title_bar(s, "Demo Video", "Narrated walkthrough of every feature")
+    _text(s, Inches(0.7), Inches(1.6), Inches(4.5), Inches(5.0), [
+        {"text": "A 3:14 narrated video", "size": 17, "bold": True, "color": NAVY, "space_after": 4},
+        {"text": "16 scenes with voice-over and on-screen captions.",
+         "size": 13, "color": INK, "space_after": 12},
+        {"text": "Covers every feature", "size": 17, "bold": True, "color": NAVY, "space_after": 4},
+        {"text": "Document / JIRA / GitHub optimization, the offline pipeline, both skills, "
+                 "A/B validation, the dashboard, the guided demo, and the CLI.",
+         "size": 13, "color": INK, "space_after": 12},
+        {"text": "Reproducible & offline", "size": 17, "bold": True, "color": NAVY, "space_after": 4},
+        {"text": "Built with scripts/generate_demo_video.py (SAPI voice-over + ffmpeg).",
+         "size": 13, "color": INK, "space_after": 12},
+        {"text": "File: docs/TokenOptimizer-Demo.mp4", "size": 12, "color": MUTED},
+    ])
+    if DEMO_THUMB.exists():
+        pic = s.shapes.add_picture(str(DEMO_THUMB), Inches(5.5), Inches(1.7), width=Inches(7.2))
+        cx = Inches(5.5) + pic.width // 2
+        cy = Inches(1.7) + pic.height // 2
+        r = Inches(0.58)
+        circ = s.shapes.add_shape(MSO_SHAPE.OVAL, cx - r, cy - r, r * 2, r * 2)
+        circ.fill.solid()
+        circ.fill.fore_color.rgb = NAVY
+        circ.line.color.rgb = WHITE
+        circ.line.width = Pt(2.5)
+        circ.shadow.inherit = False
+        _text(s, cx - r, cy - r - Inches(0.02), r * 2, r * 2,
+              [{"text": "▶", "size": 32, "bold": True, "color": WHITE, "align": PP_ALIGN.CENTER}],
+              align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE)
+        _text(s, Inches(5.5), Inches(6.35), Inches(7.2), Inches(0.4),
+              [{"text": "TokenOptimizer-Demo.mp4  ·  3:14  ·  voice-over", "size": 11,
+                "color": MUTED, "align": PP_ALIGN.CENTER}], align=PP_ALIGN.CENTER)
+    _footer(s, 10)
+
+    # 11 ── Architecture ─────────────────────────────────────────────────────
     s = _blank(prs)
     _title_bar(s, "Architecture", "Layered, offline-first")
     layers = [("Interfaces", "CLI · Desktop UI · Packaged skills", NAVY),
@@ -358,19 +395,19 @@ def build(prs, D):
         _text(s, Inches(4.5), y, Inches(8.0), Inches(0.92),
               [{"text": detail, "size": 13, "color": rgb(0xE8EEF7)}], anchor=MSO_ANCHOR.MIDDLE)
         y += Inches(1.02)
-    _footer(s, 10)
+    _footer(s, 11)
 
-    # 11 ── Business value ───────────────────────────────────────────────────
+    # 12 ── Business value ───────────────────────────────────────────────────
     _bullets_slide(
         prs, "Business Value", "Why it scales", [
             f"Direct cost savings of up to ~{D['cost_saved']}% on AI-assisted development spend.",
             f"Validated across {D['num_bus']} business units — extensible to the whole org.",
             "Higher trust in AI output through verifiable file:line anchoring.",
             "Data-driven — every claim backed by A/B evidence, not anecdote.",
-        ], 11,
+        ], 12,
         note="Offline-first: real savings with no API key; better still with Claude or a local model.")
 
-    # 12 ── Closing ──────────────────────────────────────────────────────────
+    # 13 ── Closing ──────────────────────────────────────────────────────────
     s = _blank(prs)
     _rect(s, 0, 0, EMU_W, EMU_H, NAVY)
     _rect(s, 0, Inches(3.7), EMU_W, Inches(0.08), BLUE)

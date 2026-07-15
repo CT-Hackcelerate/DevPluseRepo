@@ -101,11 +101,11 @@ Credentials come from the UI form or fall back to environment / `.env`.
 
 ## 5. Feature-development skills
 
-Two skills ([`skills/`](../src/token_optimizer/skills/)) that optimise AI token
+Two skills ([`skills/`](../skills/)) that optimise AI token
 usage during feature development. All three components are deterministic and run
 fully offline.
 
-### 5.1 Skill 1 — PRD compression (`skills/prd/compressor.py`)
+### 5.1 Skill 1 — PRD compression (`skills/prd_compression/`)
 Distills a verbose PRD / spec / ticket into a dense, structured set of
 **requirement atoms** before it reaches the LLM.
 
@@ -124,25 +124,25 @@ Distills a verbose PRD / spec / ticket into a dense, structured set of
 `reduction_pct`, atoms, dropped-unit count). **~67–73% input-token reduction** on
 the validation dataset — a floor of 67% is locked by tests.
 
-### 5.2 Skill 2a — Codebase anchoring (`skills/anchor/`)
+### 5.2 Skill 2a — Codebase anchoring (`skills/codebase_anchoring/`)
 Grounds an AI plan in the real repository so steps reference verifiable code.
 
-- [`indexer.py`](../src/token_optimizer/skills/anchor/indexer.py) walks a repo and
+- [`indexer.py`](../skills/codebase_anchoring/indexer.py) walks a repo and
   builds a symbol table with exact `file:line` locations — **AST-based for
   Python** (accurate), regex fallback for JS/TS/JSX/TSX, Java, Go, Ruby, and C#.
-- [`anchor.py`](../src/token_optimizer/skills/anchor/anchor.py) resolves each plan
+- [`anchor.py`](../skills/codebase_anchoring/anchor.py) resolves each plan
   step's symbol-like mentions to a real `path:line` **anchor**; symbol-like terms
   that resolve to nothing are recorded as `unresolved_terms` and **flagged as
   possible hallucinations** rather than silently accepted.
 - `anchoring_accuracy(anchors)` reports the fraction of steps that resolved.
 
-### 5.3 Skill 2b — Model routing (`skills/router/`)
+### 5.3 Skill 2b — Model routing (`skills/model_routing/`)
 Routes each task to the cheapest capable model.
 
-- [`classifier.py`](../src/token_optimizer/skills/router/classifier.py) scores a
+- [`classifier.py`](../skills/model_routing/classifier.py) scores a
   task as **trivial / standard / complex** from keyword + structural signals and
   returns a `confidence`.
-- [`router.py`](../src/token_optimizer/skills/router/router.py) maps the tier to a
+- [`router.py`](../skills/model_routing/router.py) maps the tier to a
   model — `claude-haiku-4-5` (trivial) → `claude-sonnet-5` (standard) →
   `claude-opus-4-8` (complex) — and applies a **confidence-threshold fallback**:
   below the threshold it upgrades one tier toward premium, so a cheap model is
@@ -183,12 +183,16 @@ cost savings, **24.0/25** average optimised quality (baseline 19.5) across the
 
 ## 7. Interfaces
 
-### Packaged skills (`.claude/skills/`)
-The skills are also packaged as invokable Claude Code skills, each wrapping the
-CLI commands below:
+### Skills as self-contained packages (`skills/`)
+Each skill is an **independently-maintained top-level package** — its code,
+`SKILL.md` manifest, and tests live together and it's importable on its own:
 
-- **[`prd-compressor`](../.claude/skills/prd-compressor/SKILL.md)** — Skill 1: PRD/spec/ticket compression.
-- **[`codebase-anchor-router`](../.claude/skills/codebase-anchor-router/SKILL.md)** — Skill 2: `file:line` anchoring (2a) + complexity-based model routing (2b).
+- **[`prd_compression`](../skills/prd_compression/SKILL.md)** — Skill 1: PRD/spec/ticket compression.
+- **[`codebase_anchoring`](../skills/codebase_anchoring/SKILL.md)** — Skill 2a: `file:line` anchoring.
+- **[`model_routing`](../skills/model_routing/SKILL.md)** — Skill 2b: complexity-based model routing.
+
+They depend on the core package but not on each other, and are discovered by
+`pip install -e .` via the `packages.find` roots (`src`, `skills`).
 
 ### Desktop UI (`tokenopt ui`)
 Dependency-free Tkinter app ([`ui/app.py`](../src/token_optimizer/ui/app.py)) with
@@ -272,27 +276,28 @@ Logs are `.gitignore`d. Logging never raises — a logging failure can't break a
 
 ## 10. Project layout
 
-Layered `src/` package: cross-cutting infrastructure in `core/`, the product
-skills in `skills/`, and everything else grouped by responsibility.
+Two source roots (both installed by `pip install -e .`): the **core package**
+under `src/`, and the **skill plugins** under `skills/` — each skill a
+self-contained, independently-maintained package.
 
 ```
-src/token_optimizer/
+src/token_optimizer/     core package
   cli.py                 `tokenopt` command (all subcommands)
   core/                  cross-cutting infrastructure
     config.py            env-driven configuration
     run_log.py           per-run logging
     llm/                 Claude client + response cache
-  skills/                feature-development skills
-    prd/                 Skill 1  — PRD compression
-    anchor/              Skill 2a — codebase file:line anchoring
-    router/              Skill 2b — complexity-based model routing
   optimize/              optimization pipeline (local reductions, compress,
                          summarize, prefilter, tokens, text/structured pipelines)
   integrations/          JIRA, GitHub, Azure DevOps, GitLab, Jenkins, documents
   automations/           ready-made flows (JIRA triage, Jenkins RCA, PR review)
   evaluation/            A/B runner, 25-pt rubric, cost model, dataset, dashboard
   ui/                    desktop Tkinter app (app.py, `python -m token_optimizer.ui`)
-docs/                    FEATURES.md, plan, generated documentation PDF
+skills/                  self-contained skill plugins (code + SKILL.md + tests)
+  prd_compression/       Skill 1  — PRD compression        (imports as prd_compression)
+  codebase_anchoring/    Skill 2a — codebase file:line anchoring
+  model_routing/         Skill 2b — complexity-based model routing
+docs/                    FEATURES.md, CHANGELOG.md, plan, generated PDFs / deck / video
 examples/                sample PRD / document inputs
 tests/                   offline test suites (test_optimize, test_hackcelerate)
 ```

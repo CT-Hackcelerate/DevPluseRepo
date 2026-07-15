@@ -221,9 +221,10 @@ def build_story(S: dict, meta: dict) -> list:
          "depends on nothing else in the project.")
     diagram(
         "+---------------------------------------------------------------+\n"
-        "|  INTERFACES     cli.py  |  ui/ (Tkinter)  |  .claude/skills/    |\n"
+        "|  INTERFACES     cli.py   .   ui/  (Tkinter desktop app)         |\n"
         "+---------------------------------------------------------------+\n"
-        "|  SKILLS         skills/prd     skills/anchor     skills/router  |\n"
+        "|  SKILLS (top-level plugins)   prd_compression .                |\n"
+        "|                 codebase_anchoring . model_routing             |\n"
         "|  WORKFLOWS      automations/ (triage, review)                   |\n"
         "|  EVALUATION     evaluation/ (ab_runner, rubric, cost, dashboard)|\n"
         "+---------------------------------------------------------------+\n"
@@ -252,9 +253,9 @@ def build_story(S: dict, meta: dict) -> list:
         ["optimize/", "Deterministic reductions, compression, summarization tiers, token counting, and the text/structured pipelines."],
         ["integrations/", "Connectors for JIRA, GitHub, GitLab, Jenkins, Azure DevOps, and documents."],
         ["automations/", "End-to-end flows: JIRA triage, Jenkins RCA, GitHub PR review/triage."],
-        ["skills/prd/", "Skill 1 — compress a PRD into requirement atoms."],
-        ["skills/anchor/", "Skill 2a — index a repo and anchor plan steps to file:line."],
-        ["skills/router/", "Skill 2b — classify task complexity and route to a model."],
+        ["skills/prd_compression/", "Skill 1 — compress a PRD into requirement atoms (top-level plugin)."],
+        ["skills/codebase_anchoring/", "Skill 2a — index a repo and anchor plan steps to file:line."],
+        ["skills/model_routing/", "Skill 2b — classify task complexity and route to a model."],
         ["evaluation/", "A/B runner, 25-point rubric, cost model, dataset, HTML dashboard."],
         ["ui/", "Tkinter desktop app (three tabs) — app.py, python -m entry."],
         ["cli.py", "The tokenopt command exposing every capability."],
@@ -262,17 +263,17 @@ def build_story(S: dict, meta: dict) -> list:
 
     # ── 6. Feature-dev skills ──────────────────────────────────────────
     heading("6. Feature-Development Skills")
-    story.append(P("<b>Skill 1 — PRD Compression</b> (skills/prd)", "h2"))
+    story.append(P("<b>Skill 1 — PRD Compression</b> (skills/prd_compression)", "h2"))
     para("Segments a PRD into units, classifies each into a requirement category "
          "(goal, acceptance-criteria, constraint, non-functional, dependency, "
          "out-of-scope), drops low-signal framing, and re-renders terse atoms. "
          "Acceptance criteria are preserved verbatim. ~67–73% input-token reduction.")
-    story.append(P("<b>Skill 2a — Codebase Anchoring</b> (skills/anchor)", "h2"))
+    story.append(P("<b>Skill 2a — Codebase Anchoring</b> (skills/codebase_anchoring)", "h2"))
     para("Indexes a repository into a symbol table with exact file:line locations "
          "(AST for Python, regex for JS/TS/Java/Go/Ruby/C#) and resolves each plan "
          "step's symbol mentions to a real anchor. Unresolved symbol-like terms are "
          "flagged as possible hallucinations.")
-    story.append(P("<b>Skill 2b — Model Routing</b> (skills/router)", "h2"))
+    story.append(P("<b>Skill 2b — Model Routing</b> (skills/model_routing)", "h2"))
     para("Classifies a task as trivial / standard / complex with a confidence score, "
          "then routes to haiku / sonnet / opus respectively. A confidence-threshold "
          "fallback upgrades one tier toward premium when the classifier is unsure, so a "
@@ -329,7 +330,7 @@ def build_story(S: dict, meta: dict) -> list:
         "Installed as an editable package; the tokenopt console script is the primary entry point.",
         "Desktop UI: tokenopt ui or python -m token_optimizer.ui (Tkinter, no extra deps).",
         "Windows launcher run.bat wraps the venv for double-click or terminal use.",
-        "Packaged Claude Code skills under .claude/skills/ wrap the CLI for agent use.",
+        "Each skill is a self-contained top-level package under skills/ (code + SKILL.md + tests).",
         "Runs on a single machine; no server component. Optional network calls: Claude API, Ollama, integrations.",
     ])
 
@@ -375,10 +376,9 @@ def build_story(S: dict, meta: dict) -> list:
     # ── 14. Directory structure ────────────────────────────────────────
     heading("14. Directory Structure")
     diagram(
-        "src/token_optimizer/\n"
+        "src/token_optimizer/     core package\n"
         "  cli.py                 tokenopt command (all subcommands)\n"
         "  core/                  config . run_log . llm (client + cache)\n"
-        "  skills/                prd (Skill 1) . anchor (2a) . router (2b)\n"
         "  optimize/              local . compress . summarize . prefilter .\n"
         "                         tokens . text/structured pipelines\n"
         "  integrations/          jira . github . gitlab . jenkins . azdo . docs\n"
@@ -386,6 +386,9 @@ def build_story(S: dict, meta: dict) -> list:
         "  evaluation/            ab_runner . quality_rubric . cost . datasets .\n"
         "                         dashboard\n"
         "  ui/                    app.py (three-tab Tkinter app), __main__.py\n"
+        "skills/                  self-contained skill plugins (code + SKILL.md + tests)\n"
+        "  prd_compression/       Skill 1 . codebase_anchoring/  Skill 2a\n"
+        "  model_routing/         Skill 2b\n"
         "docs/                    FEATURES.md . CHANGELOG.md . this ADD . plan . PDFs\n"
         "examples/                sample PRD / document inputs\n"
         "tests/                   test_optimize.py . test_hackcelerate.py"

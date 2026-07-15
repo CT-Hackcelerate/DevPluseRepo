@@ -58,10 +58,21 @@ this changelog. **Architectural Design Document** at
 `scripts/generate_architecture_pdf.py`) — layers, components, runtime flows,
 cross-cutting concerns, and design-decision rationale. **Hackcelerate pitch deck**
 at `docs/TokenOptimizer-Hackcelerate.pptx` (generator:
-`scripts/generate_hackcelerate_ppt.py`) — 12 slides with a live A/B chart and the
-embedded dashboard.
+`scripts/generate_hackcelerate_ppt.py`) — 13 slides with a live A/B chart, the
+embedded dashboard, and a demo-video slide. **Narrated demo video** at
+`docs/TokenOptimizer-Demo.mp4` (generator: `scripts/generate_demo_video.py`) — a
+3:14, 16-scene voice-over walkthrough of every feature (SAPI TTS + ffmpeg).
 
 ### Changed
+
+**Skills extracted to top-level plugins** — the three skills moved out of the core
+package into a decoupled, independently-maintained `skills/` tree, each a
+self-contained package (code + `SKILL.md` + tests): `src/token_optimizer/skills/prd`
+→ `skills/prd_compression`, `.../anchor` → `skills/codebase_anchoring`, `.../router`
+→ `skills/model_routing`. `pyproject.toml` adds `skills` as a second `packages.find`
+root (importable as `prd_compression` / `codebase_anchoring` / `model_routing`);
+the old combined `.claude/skills/codebase-anchor-router` manifest is superseded by
+per-skill `SKILL.md` files. All imports/tests updated; 68 tests pass.
 
 **Validation dataset made realistic** (`evaluation/datasets.py`) — the 8 sample
 PRDs were already terse (compressed only ~13%). They now carry the framing real
